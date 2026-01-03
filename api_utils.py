@@ -40,18 +40,28 @@ class GrokAPI:
         
         Args:
             timeout: Request timeout in seconds (default: 60.0)
-            Note: Timeout not set in client init due to version compatibility.
-            Timeouts are handled at the request level if needed.
         """
-        # Don't set timeout in client init due to OpenAI/httpx version compatibility issue
-        # The OpenAI client will use its default timeout (typically 600 seconds)
-        # Timeout handling can be added per-request if needed
-        self.client = OpenAI(
-            api_key=settings.xai_api_key,
-            base_url=settings.xai_api_base
-        )
+        self._client = None  # Lazy initialization to avoid import-time errors
+        self.api_key = settings.xai_api_key
+        self.base_url = settings.xai_api_base
         self.model = settings.xai_model
-        self.timeout = timeout  # Store for reference, even though not used in client init
+        self.timeout = timeout
+    
+    @property
+    def client(self):
+        """Lazy initialization of OpenAI client to avoid version compatibility issues at import time."""
+        if self._client is None:
+            # Use explicit httpx client to work around OpenAI/httpx version incompatibility
+            import httpx
+            http_client = httpx.Client(
+                timeout=httpx.Timeout(600.0, connect=10.0)
+            )
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                http_client=http_client
+            )
+        return self._client
     
     def generate_completion(
         self,
@@ -358,5 +368,5 @@ class GrokAPI:
         return None
 
 
-# Global API instance with 60-second timeout
+# Global API instance with lazy client initialization
 grok_api = GrokAPI(timeout=60.0)
