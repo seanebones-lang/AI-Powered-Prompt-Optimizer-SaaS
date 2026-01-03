@@ -20,7 +20,7 @@ Streamlit Cloud uses a "Secrets" system to store environment variables securely.
 XAI_API_KEY = "your_actual_xai_api_key_here"
 SECRET_KEY = "your_secret_key_for_session_management_here"
 XAI_API_BASE = "https://api.x.ai/v1"
-XAI_MODEL = "grok-4.1-fast"
+XAI_MODEL = "grok-4-1-fast-reasoning"
 DATABASE_URL = "sqlite:///prompt_optimizer.db"
 FREE_TIER_DAILY_LIMIT = "5"
 PAID_TIER_DAILY_LIMIT = "1000"
@@ -35,7 +35,7 @@ ENABLE_COLLECTIONS = "false"
 
 **Optional (will use defaults if not set):**
 - `XAI_API_BASE` - Default: `https://api.x.ai/v1`
-- `XAI_MODEL` - Default: `grok-4.1-fast`
+- `XAI_MODEL` - Default: `grok-4-1-fast-reasoning` (use hyphens, NOT dots)
 - `DATABASE_URL` - Default: `sqlite:///prompt_optimizer.db`
 - `FREE_TIER_DAILY_LIMIT` - Default: `5`
 - `PAID_TIER_DAILY_LIMIT` - Default: `1000`
