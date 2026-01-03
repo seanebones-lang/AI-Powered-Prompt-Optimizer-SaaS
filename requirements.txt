@@ -1,5 +1,5 @@
 streamlit==1.52.0
-xai-sdk>=1.0.0  # Official xAI Python SDK for Grok API
+openai>=1.54.4,<2.0.0  # OpenAI-compatible client for xAI Grok API (xAI API is OpenAI-compatible)
 python-dotenv==1.0.1
 sqlalchemy==2.0.36
 bcrypt==4.2.0

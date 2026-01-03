@@ -1,12 +1,13 @@
 """
-xAI Grok API integration utilities using the official xAI Python SDK.
+xAI Grok API integration utilities.
 Handles API calls to Grok 4.1 Fast with agent tools support for multi-step reasoning.
+
+Uses OpenAI-compatible client with xAI's base_url since xAI's API is OpenAI-compatible.
 """
 import json
 import logging
 from typing import Dict, List, Optional, Any
-from xai_sdk import Client
-from xai_sdk.chat import system, user
+from openai import OpenAI
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -26,18 +27,22 @@ IMPORTANT IDENTITY RULES:
 
 
 class GrokAPI:
-    """Wrapper for xAI Grok API using the official xAI Python SDK."""
+    """Wrapper for xAI Grok API using OpenAI-compatible client."""
     
     def __init__(self, timeout: float = 60.0):
         """
-        Initialize xAI Grok API client.
+        Initialize Grok API client.
         
-        Uses the official xAI Python SDK (xai-sdk).
+        Uses OpenAI-compatible client with xAI's base_url.
+        xAI's API is fully OpenAI-compatible, so we use the OpenAI client.
         
         Args:
             timeout: Request timeout in seconds (default: 60.0)
         """
-        self.client = Client(api_key=settings.xai_api_key)
+        self.client = OpenAI(
+            api_key=settings.xai_api_key,
+            base_url=settings.xai_api_base
+        )
         self.model = settings.xai_model
         self.timeout = timeout
     
@@ -52,7 +57,7 @@ class GrokAPI:
         enforce_persona: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate a completion using xAI Grok API.
+        Generate a completion using Grok API.
         
         Args:
             prompt: User prompt
@@ -60,13 +65,15 @@ class GrokAPI:
             temperature: Sampling temperature (0-1)
             max_tokens: Maximum tokens in response
             tools: Optional list of tool definitions for agent capabilities
-            tool_choice: Tool choice strategy (not used in xAI SDK - handled automatically)
+            tool_choice: Tool choice strategy ("auto", "required", or specific tool name)
             enforce_persona: Whether to enforce NextEleven AI persona (default: True)
         
         Returns:
             Dictionary with response content and metadata
         """
         try:
+            messages = []
+            
             # Build system prompt with persona enforcement
             full_system_prompt = ""
             if enforce_persona:
@@ -76,57 +83,119 @@ class GrokAPI:
             else:
                 full_system_prompt = system_prompt or ""
             
-            # Create chat with system message
-            # Note: xAI SDK's chat.create() doesn't accept temperature/max_tokens
-            # These parameters are passed to chat.sample() but xAI SDK 1.5.0 doesn't support them
-            # We'll create the chat and call sample() without parameters
             if full_system_prompt:
-                chat = self.client.chat.create(
-                    model=self.model,
-                    messages=[system(full_system_prompt)]
-                )
-            else:
-                chat = self.client.chat.create(
-                    model=self.model,
-                    messages=[]
-                )
+                messages.append({"role": "system", "content": full_system_prompt})
             
-            # Add user message
-            chat.append(user(prompt))
+            messages.append({"role": "user", "content": prompt})
             
-            # Generate response - xAI SDK 1.5.0's sample() doesn't accept temperature/max_tokens
-            # These are model defaults or set at model level
-            response = chat.sample()
-            
-            # Check if response is None
-            if response is None:
-                raise Exception("xAI API returned None response")
-            
-            # Extract content - xAI SDK response object has .content attribute
-            content = None
-            if hasattr(response, 'content'):
-                content = response.content
-            elif hasattr(response, 'text'):
-                content = response.text
-            else:
-                # Fallback: try to convert to string
-                content = str(response) if response else ""
-            
-            if content is None:
-                content = ""
-            
-            # Extract usage information - xAI SDK response.usage is an object with token counts
-            usage_info = {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             }
             
-            if hasattr(response, 'usage') and response.usage is not None:
-                usage_info = {
-                    "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0) or 0,
-                    "completion_tokens": getattr(response.usage, 'completion_tokens', 0) or 0,
-                    "total_tokens": getattr(response.usage, 'total_tokens', 0) or 0
+            # Add tools if provided (for agent capabilities, including Collections)
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = tool_choice or "auto"
+            
+            # Note: Grok Collections API uses tool calling with "file_search" tool name
+            # Collections are automatically searched when tools are enabled and collections_search is included
+            
+            response = self.client.chat.completions.create(**kwargs)
+            
+            # Handle tool calls recursively if present (for Collections API)
+            tool_calls = None
+            content = None
+            total_usage = None
+            
+            if response.choices[0].message.tool_calls:
+                logger.info(f"Tool calls detected: {len(response.choices[0].message.tool_calls)} tool(s)")
+                
+                # Extract tool calls
+                tool_calls = []
+                for tc in response.choices[0].message.tool_calls:
+                    try:
+                        args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                    except:
+                        args = tc.function.arguments
+                    
+                    tool_calls.append({
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": args
+                        }
+                    })
+                
+                # Process tool calls and make recursive call with results
+                tool_results = self._process_tool_calls(tool_calls)
+                
+                # Build messages for recursive call
+                recursive_messages = list(messages)
+                
+                # Add assistant message with tool calls
+                recursive_messages.append({
+                    "role": "assistant",
+                    "content": response.choices[0].message.content or None,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": json.dumps(tc.function.arguments) if isinstance(tc.function.arguments, dict) else str(tc.function.arguments)
+                            }
+                        }
+                        for tc in response.choices[0].message.tool_calls
+                    ]
+                })
+                
+                # Add tool results for each tool call
+                for tc in response.choices[0].message.tool_calls:
+                    recursive_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": tool_results
+                    })
+                
+                # Recursive call with tool results
+                logger.info("Making recursive API call with tool results for Collections search...")
+                try:
+                    recursive_response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=recursive_messages,
+                        temperature=kwargs.get("temperature", 0.7),
+                        max_tokens=kwargs.get("max_tokens", 2000),
+                        tools=kwargs.get("tools"),
+                        tool_choice=kwargs.get("tool_choice", "auto")
+                    )
+                    
+                    content = recursive_response.choices[0].message.content
+                    
+                    # Update usage (add recursive call tokens)
+                    total_usage = {
+                        "prompt_tokens": response.usage.prompt_tokens + recursive_response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens + recursive_response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens + recursive_response.usage.total_tokens,
+                    }
+                except Exception as e:
+                    logger.warning(f"Recursive call failed, using original response: {str(e)}")
+                    content = response.choices[0].message.content
+                    total_usage = {
+                        "prompt_tokens": response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    }
+            else:
+                # No tool calls, use direct content
+                content = response.choices[0].message.content
+                total_usage = {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
                 }
             
             # Post-process to enforce persona (sanitize any accidental mentions)
@@ -135,10 +204,10 @@ class GrokAPI:
             
             return {
                 "content": content,
-                "tool_calls": None,  # xAI SDK handles tool calls differently
-                "model": self.model,
-                "usage": usage_info,
-                "finish_reason": getattr(response, 'finish_reason', 'stop') if hasattr(response, 'finish_reason') else 'stop',
+                "tool_calls": tool_calls,
+                "model": response.model,
+                "usage": total_usage,
+                "finish_reason": response.choices[0].finish_reason,
             }
         except Exception as e:
             error_msg = str(e)
@@ -147,7 +216,7 @@ class GrokAPI:
                 logger.error(f"API call timed out after {self.timeout}s: {error_msg}")
                 raise Exception(f"API call timed out after {self.timeout} seconds. Please try again.")
             else:
-                logger.error(f"Error calling xAI Grok API: {error_msg}", exc_info=True)
+                logger.error(f"Error calling Grok API: {error_msg}", exc_info=True)
                 raise Exception(f"API call failed: {error_msg}")
     
     def generate_optimized_output(
@@ -173,7 +242,7 @@ class GrokAPI:
             system_prompt=additional_system,
             temperature=0.8,
             max_tokens=max_tokens,
-            enforce_persona=True  # Always enforce persona
+            enforce_persona=True
         )
         
         return response["content"]
@@ -208,6 +277,40 @@ class GrokAPI:
         
         return sanitized
     
+    def _process_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> str:
+        """
+        Process tool calls (e.g., Collections search).
+        
+        Note: For Grok Collections API, the search is executed server-side by Grok.
+        This method logs the tool calls and prepares for recursive API handling.
+        
+        Args:
+            tool_calls: List of tool call dictionaries
+        
+        Returns:
+            Formatted tool results as string (for logging/tracking)
+        """
+        results = []
+        
+        for tool_call in tool_calls:
+            function_name = tool_call.get("function", {}).get("name", "")
+            arguments = tool_call.get("function", {}).get("arguments", {})
+            
+            if function_name == "file_search":
+                # Collections search - Grok executes this server-side
+                query = arguments.get("query", "unknown query") if isinstance(arguments, dict) else "unknown query"
+                collection_ids = arguments.get("collection_ids", []) if isinstance(arguments, dict) else []
+                
+                logger.info(f"Collections search tool called: '{query}' in collections {collection_ids}")
+                logger.info("Grok will execute the search server-side and return results in recursive call")
+                
+                results.append(f"Collections search executed for: {query}")
+            else:
+                logger.warning(f"Unknown tool call: {function_name}")
+                results.append(f"Tool {function_name} called")
+        
+        return "\n".join(results) if results else "Tool calls processed. Grok will provide results."
+    
     def handle_identity_query(self, query: str) -> Optional[str]:
         """
         Handle identity-related queries specifically.
@@ -230,7 +333,7 @@ class GrokAPI:
         if is_identity_query:
             response = self.generate_completion(
                 prompt=query,
-                system_prompt=None,  # Base persona handles it
+                system_prompt=None,
                 temperature=0.7,
                 max_tokens=500,
                 enforce_persona=True
