@@ -41,10 +41,15 @@ class GrokAPI:
         Args:
             timeout: Request timeout in seconds (default: 60.0)
         """
+        import httpx
+        
+        # Create timeout object for httpx client
+        http_timeout = httpx.Timeout(timeout, connect=10.0)
+        
         self.client = OpenAI(
             api_key=settings.xai_api_key,
             base_url=settings.xai_api_base,
-            timeout=timeout
+            timeout=http_timeout
         )
         self.model = settings.xai_model
         self.timeout = timeout
