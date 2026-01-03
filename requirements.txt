@@ -1,5 +1,5 @@
 streamlit==1.52.0
-openai>=1.54.4  # xAI Grok API compatible client (1.54.4+ fixes httpx 0.28 compatibility)
+openai>=1.54.4,<2.0.0  # xAI Grok API compatible client (1.54.4+ fixes httpx 0.28, <2.0.0 prevents major version break)
 python-dotenv==1.0.1
 sqlalchemy==2.0.36
 bcrypt==4.2.0

@@ -2,17 +2,8 @@
 Configuration management for the AI-Powered Prompt Optimizer SaaS.
 Supports both Streamlit Cloud secrets (st.secrets) and environment variables (.env).
 """
-from pydantic_settings import BaseSettings
 from typing import Optional
 import os
-
-# Try to import streamlit for secrets access (available in Streamlit Cloud)
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    STREAMLIT_AVAILABLE = False
-    st = None
 
 
 def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
@@ -27,16 +18,22 @@ def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
         Setting value or default
     """
     # Try Streamlit secrets first (for Streamlit Cloud)
-    if STREAMLIT_AVAILABLE and st is not None:
-        try:
-            # Access secrets dict (st.secrets is a dict-like object)
-            if hasattr(st, 'secrets') and key in st.secrets:
-                return st.secrets[key]
-        except Exception:
-            pass  # Fall through to environment variables
+    # Note: st.secrets is only available at runtime, not at module import time
+    # So we check environment variables which Streamlit Cloud populates from secrets
+    # Streamlit Cloud automatically makes secrets available as environment variables
     
-    # Fall back to environment variables (for local development)
-    return os.getenv(key, default)
+    # Check environment variables (works for both Streamlit Cloud and local dev)
+    value = os.getenv(key, default)
+    
+    # Also try lowercase version (for case-insensitive matching)
+    if value is None or value == default:
+        value = os.getenv(key.lower(), default)
+    
+    # Also try uppercase version
+    if value is None or value == default:
+        value = os.getenv(key.upper(), default)
+    
+    return value
 
 
 class Settings:
