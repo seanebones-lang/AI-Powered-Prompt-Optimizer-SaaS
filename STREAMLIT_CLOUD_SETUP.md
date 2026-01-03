@@ -77,7 +77,28 @@ print(secrets.token_hex(32))
 - Check for typos in secret names (case-sensitive in some contexts)
 - Wait for redeployment to complete
 
-**Error: "API call failed"**
-- Verify your `XAI_API_KEY` is correct and active
-- Check xAI API status at https://x.ai/api
-- Review logs in Streamlit Cloud dashboard
+**Error: "API call failed" or "NoneType object is not subscriptable"**
+- Verify your `XAI_API_KEY` is correct and active at https://console.x.ai/api-keys
+- **Test your API key locally** using the test script:
+  ```bash
+  python3 test_api_key.py
+  ```
+- **Or test with curl:**
+  ```bash
+  curl https://api.x.ai/v1/chat/completions \
+    -H "Authorization: Bearer YOUR_XAI_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"model": "grok-4-1-fast-reasoning", "messages": [{"role": "user", "content": "Test"}]}'
+  ```
+  Expected: 200 OK response. If 400/401, your key is invalid.
+
+**Error: "Invalid model" or "Model not found"**
+- Ensure `XAI_MODEL` in secrets is exactly: `grok-4-1-fast-reasoning` (with hyphens, no dots)
+- Alternative: `grok-4-1-fast-non-reasoning` for faster responses
+- Do NOT use: `grok-4.1-fast` (old format with dots - invalid)
+
+**Common Issues:**
+- **Invalid/Expired API Key**: Regenerate at https://console.x.ai/api-keys
+- **Model Name Mismatch**: Must be `grok-4-1-fast-reasoning` (hyphens, not dots)
+- **Network/Quota**: Check xAI console for usage limits (free tier: $25/month credits)
+- **Rate Limits**: 4M tokens/minute limit - if exceeded, wait and retry
