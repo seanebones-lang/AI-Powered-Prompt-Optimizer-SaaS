@@ -1,5 +1,5 @@
 streamlit==1.52.0
-xai-python>=0.5.2  # Official xAI Python SDK for Grok API
+xai-sdk>=1.0.0  # Official xAI Python SDK for Grok API
 python-dotenv==1.0.1
 sqlalchemy==2.0.36
 bcrypt==4.2.0
