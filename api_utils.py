@@ -106,26 +106,58 @@ class GrokAPI:
             }
             with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
                 response = client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
+                
+                # Check for HTTP errors first
+                if response.status_code != 200:
+                    error_text = response.text
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get("error", {}).get("message", error_text)
+                    except:
+                        error_msg = error_text
+                    raise Exception(f"API error ({response.status_code}): {error_msg}")
+                
                 data = response.json()
             
             # Validate response structure
-            if not data or not isinstance(data, dict):
-                raise Exception(f"Invalid API response format: {data}")
+            if data is None:
+                raise Exception("API returned None response")
             
-            if "choices" not in data or not data["choices"]:
-                error_msg = data.get("error", {}).get("message", "No choices in response")
-                raise Exception(f"API returned no choices: {error_msg}")
+            if not isinstance(data, dict):
+                raise Exception(f"Invalid API response format (expected dict, got {type(data)}): {data}")
             
-            if not isinstance(data["choices"], list) or len(data["choices"]) == 0:
+            # Check for error in response
+            if "error" in data:
+                error_msg = data["error"].get("message", str(data["error"]))
+                raise Exception(f"API returned error: {error_msg}")
+            
+            if "choices" not in data:
+                raise Exception(f"API response missing 'choices' field: {list(data.keys())}")
+            
+            choices = data.get("choices")
+            if choices is None:
+                raise Exception("API returned None for 'choices' field")
+            
+            if not isinstance(choices, list):
+                raise Exception(f"API returned invalid 'choices' type (expected list, got {type(choices)}): {choices}")
+            
+            if len(choices) == 0:
                 raise Exception("API returned empty choices list")
             
             # Handle response
-            choice = data["choices"][0]
-            if not choice or "message" not in choice:
-                raise Exception(f"Invalid choice format: {choice}")
+            choice = choices[0]
+            if choice is None:
+                raise Exception("First choice is None")
+            
+            if not isinstance(choice, dict):
+                raise Exception(f"Invalid choice format (expected dict, got {type(choice)}): {choice}")
+            
+            if "message" not in choice:
+                raise Exception(f"Choice missing 'message' field: {list(choice.keys())}")
             
             message = choice["message"]
+            if message is None:
+                raise Exception("Message is None")
             
             # Handle tool calls if present
             tool_calls = None
@@ -170,11 +202,26 @@ class GrokAPI:
                     
                     with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=10.0)) as recursive_client:
                         recursive_response = recursive_client.post(url, json=recursive_payload, headers=headers)
-                        recursive_response.raise_for_status()
+                        
+                        if recursive_response.status_code != 200:
+                            error_text = recursive_response.text
+                            raise Exception(f"Recursive API error ({recursive_response.status_code}): {error_text}")
+                        
                         recursive_data = recursive_response.json()
                     
-                    content = recursive_data["choices"][0]["message"].get("content")
-                    recursive_usage = recursive_data.get("usage", {})
+                    if not recursive_data or not isinstance(recursive_data, dict):
+                        raise Exception(f"Invalid recursive response: {recursive_data}")
+                    
+                    recursive_choices = recursive_data.get("choices")
+                    if not recursive_choices or not isinstance(recursive_choices, list) or len(recursive_choices) == 0:
+                        raise Exception(f"Invalid recursive choices: {recursive_choices}")
+                    
+                    recursive_choice = recursive_choices[0]
+                    if not recursive_choice or "message" not in recursive_choice:
+                        raise Exception(f"Invalid recursive choice: {recursive_choice}")
+                    
+                    content = recursive_choice["message"].get("content")
+                    recursive_usage = recursive_data.get("usage", {}) or {}
                     
                     # Combine usage
                     usage = {
