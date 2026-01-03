@@ -569,17 +569,17 @@ def show_optimize_page():
                     metrics.gauge("optimizations.avg_quality_score", quality_score)
                 
                 st.rerun()
-                    
-                except Exception as e:
-                    logger.error(f"Optimization error: {str(e)}")
-                    error_handler = ErrorHandler()
-                    user_message = error_handler.handle_api_error(e, "during optimization")
-                    error_handler.log_error(e, context={"operation": "optimization"})
-                    
-                    progress_bar.progress(100)
-                    status_text.text("❌ Error occurred")
-                    st.error(f"❌ {user_message}")
-                    st.info("💡 Tip: Check your API key configuration and internet connection.")
+                
+            except Exception as e:
+                logger.error(f"Optimization error: {str(e)}")
+                error_handler = ErrorHandler()
+                user_message = error_handler.handle_api_error(e, "during optimization")
+                error_handler.log_error(e, context={"operation": "optimization"})
+                
+                progress_bar.progress(100)
+                status_text.text("❌ Error occurred")
+                st.error(f"❌ {user_message}")
+                st.info("💡 Tip: Check your API key configuration and internet connection.")
     
     # Display results
     if st.session_state.optimization_results:
