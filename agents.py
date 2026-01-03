@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from api_utils import grok_api
 from collections_utils import enable_collections_for_agent, is_collections_enabled
 from config import settings
+from agentic_rag import retrieve_prompt_examples, is_agentic_rag_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -292,9 +293,26 @@ Diagnosis:
 
 Design an optimized version of this prompt. Include both the optimized prompt and a brief explanation of improvements."""
 
-        # Enable Collections search if configured and enabled (RAG integration)
+        # Try Agentic RAG first if enabled (more advanced retrieval)
+        rag_examples = None
+        if is_agentic_rag_enabled():
+            logger.info("Using Agentic RAG for prompt example retrieval")
+            rag_examples = retrieve_prompt_examples(
+                prompt_type=prompt_type.value,
+                original_prompt=prompt,
+                max_examples=3
+            )
+            if rag_examples:
+                user_prompt += f"""
+
+Reference Examples (from knowledge base):
+{rag_examples}
+
+Use these examples as inspiration while creating the optimized prompt."""
+
+        # Fallback to Collections search if configured and enabled
         tools = None
-        if settings.enable_collections and is_collections_enabled():
+        if not rag_examples and settings.enable_collections and is_collections_enabled():
             tools = enable_collections_for_agent(prompt_type.value, include_collections=True)
             if tools:
                 system_prompt += f"""

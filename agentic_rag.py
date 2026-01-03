@@ -350,6 +350,13 @@ class SimpleVectorStore:
         """Clear all documents."""
         self.documents = []
 
+    def get_document_by_id(self, doc_id: str) -> Optional[Document]:
+        """Get a document by its ID."""
+        for doc in self.documents:
+            if doc.id == doc_id:
+                return doc
+        return None
+
 
 class AgenticRAGWorkflow:
     """
@@ -535,3 +542,58 @@ def get_rag_workflow() -> AgenticRAGWorkflow:
     if _rag_workflow is None:
         _rag_workflow = create_rag_enhanced_workflow()
     return _rag_workflow
+
+
+def retrieve_prompt_examples(
+    prompt_type: str,
+    original_prompt: str,
+    max_examples: int = 3
+) -> Optional[str]:
+    """
+    Retrieve relevant prompt examples for the Designer agent.
+
+    Uses the Agentic RAG workflow to find relevant examples based on
+    the prompt type and original prompt content.
+
+    Args:
+        prompt_type: Type of prompt (creative, technical, analytical, marketing)
+        original_prompt: The original prompt being optimized
+        max_examples: Maximum number of examples to retrieve
+
+    Returns:
+        Formatted string with relevant examples, or None if no examples found
+    """
+    try:
+        workflow = get_rag_workflow()
+
+        # Create a query that captures the intent
+        query = f"Find {prompt_type} prompt examples similar to: {original_prompt[:200]}"
+
+        result = workflow.run(query, max_iterations=1)
+
+        if result["confidence"] < 0.4 or result["documents_used"] == 0:
+            logger.info("No relevant RAG examples found for prompt optimization")
+            return None
+
+        # Format the examples for the Designer agent
+        examples = []
+        for i, source in enumerate(result["sources"][:max_examples], 1):
+            # Get the document content from the vector store
+            doc = workflow.vector_store.get_document_by_id(source["id"])
+            if doc:
+                examples.append(f"Example {i} ({source['id']}):\n{doc.content[:500]}")
+
+        if not examples:
+            return None
+
+        return "\n\n".join(examples)
+
+    except Exception as e:
+        logger.warning(f"Error retrieving RAG examples: {str(e)}")
+        return None
+
+
+def is_agentic_rag_enabled() -> bool:
+    """Check if Agentic RAG is enabled and available."""
+    import os
+    return os.getenv("ENABLE_AGENTIC_RAG", "false").lower() == "true"
