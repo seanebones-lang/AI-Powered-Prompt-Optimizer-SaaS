@@ -7,6 +7,16 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 typing-extensions>=4.12.2  # Required for pydantic 2.9.2 on Python 3.13+
 
+# API and Export
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+reportlab>=4.0.0  # For PDF export
+python-multipart>=0.0.6  # For FastAPI file uploads
+
+# Analytics and Visualization
+plotly>=5.17.0  # For interactive charts in analytics dashboard
+pandas>=2.1.0  # For data analysis
+
 # Testing
 pytest==8.3.3
 pytest-cov==5.0.0

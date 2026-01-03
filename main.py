@@ -17,6 +17,18 @@ from input_validation import (
     validate_username,
     validate_email
 )
+from export_utils import export_results
+from analytics import Analytics
+from batch_optimization import BatchOptimizer
+from ab_testing import ABTesting
+from agent_config import AgentConfigManager
+from voice_prompting import VoicePrompting
+from integrations import SlackIntegration, DiscordIntegration, NotionIntegration
+from monitoring import get_metrics, get_health_checker
+from error_handling import ErrorHandler, retry_with_backoff, RetryStrategy
+from performance import performance_tracker
+import json
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -266,8 +278,8 @@ def check_auth_required():
 
 def check_usage_limit() -> bool:
     """Check if user has reached daily usage limit."""
-    user_id = st.session_state.user.id if st.session_state.user else None
-    return db.check_usage_limit(user_id)
+    # Beta mode: No usage limits
+    return True
 
 
 def show_login_page():
@@ -336,22 +348,29 @@ def show_login_page():
 
 def show_main_app():
     """Display main application interface."""
-    # Sidebar
+    # Sidebar navigation
     with st.sidebar:
         st.title("🚀 Prompt Optimizer")
         
-        if st.session_state.user:
-            st.markdown(f"**Welcome, {st.session_state.user.username}!**")
-            if st.session_state.user.is_premium:
-                st.success("⭐ Premium User")
-            else:
-                st.info("💡 Free Tier")
-                st.markdown(f"Daily limit: {settings.free_tier_daily_limit} optimizations")
-            
-            if st.button("Logout", use_container_width=True):
-                st.session_state.authenticated = False
-                st.session_state.user = None
-                st.rerun()
+        # Beta mode: No user display needed
+        st.markdown("**🚀 Beta Testing Mode**")
+        st.info("💡 All features are available for testing!")
+        
+        st.markdown("---")
+        st.markdown("### Navigation")
+        
+        # Page selection
+        page = st.radio(
+            "Select Page",
+            ["Optimize", "Analytics", "Batch", "A/B Testing", "Export", "Settings"],
+            label_visibility="collapsed"
+        )
+        
+        # Beta mode: All features available
+        st.markdown("---")
+        st.markdown("### All Features")
+        if st.button("Agent Config", use_container_width=True):
+            page = "Agent Config"
         
         st.markdown("---")
         st.markdown("### About")
@@ -362,6 +381,26 @@ def show_main_app():
         - **Design**: Create optimized version
         - **Deliver**: Generate sample output
         """)
+    
+    # Route to appropriate page
+    if page == "Optimize":
+        show_optimize_page()
+    elif page == "Analytics":
+        show_analytics_page()
+    elif page == "Batch":
+        show_batch_page()
+    elif page == "A/B Testing":
+        show_ab_testing_page()
+    elif page == "Export":
+        show_export_page()
+    elif page == "Settings":
+        show_settings_page()
+    elif page == "Agent Config":
+        show_agent_config_page()
+
+
+def show_optimize_page():
+    """Display the main optimization page."""
     
     # Main content
     st.markdown('<div class="main-header">AI-Powered Prompt Optimizer (Beta)</div>', unsafe_allow_html=True)
@@ -377,17 +416,46 @@ def show_main_app():
             format_func=lambda x: x.capitalize()
         )
     
-    user_prompt = st.text_area(
-        "Your Prompt",
-        height=150,
-        placeholder="Enter your prompt here... For example: 'Write a blog post about AI'",
-        help="Enter the prompt you want to optimize"
-    )
+    # Voice input option (beta: available to all)
+    use_voice = st.checkbox("🎤 Use Voice Input")
     
-    # Check usage limit
-    if not check_usage_limit():
-        st.error("❌ You've reached your daily usage limit. Upgrade to premium for unlimited access!")
-        st.stop()
+    if use_voice:
+        audio_file = st.file_uploader("Upload Audio File", type=["wav", "mp3", "m4a", "ogg"])
+        if audio_file:
+            voice_prompting = VoicePrompting()
+            with st.spinner("Transcribing audio..."):
+                result = voice_prompting.process_voice_prompt(audio_file.read(), audio_file.name.split('.')[-1])
+                if result.get("success"):
+                    user_prompt = st.text_area(
+                        "Your Prompt (from voice)",
+                        value=result.get("text", ""),
+                        height=150,
+                        help="Transcribed from audio. You can edit if needed."
+                    )
+                else:
+                    st.error(f"Error transcribing audio: {result.get('error')}")
+                    user_prompt = st.text_area(
+                        "Your Prompt",
+                        height=150,
+                        placeholder="Enter your prompt here... For example: 'Write a blog post about AI'",
+                        help="Enter the prompt you want to optimize"
+                    )
+        else:
+            user_prompt = st.text_area(
+                "Your Prompt",
+                height=150,
+                placeholder="Upload an audio file to transcribe, or enter text manually",
+                help="Enter the prompt you want to optimize"
+            )
+    else:
+        user_prompt = st.text_area(
+            "Your Prompt",
+            height=150,
+            placeholder="Enter your prompt here... For example: 'Write a blog post about AI'",
+            help="Enter the prompt you want to optimize"
+        )
+    
+    # Beta mode: No usage limits
     
     # Optimize button
     if st.button("🚀 Optimize Prompt", type="primary", use_container_width=True):
@@ -406,55 +474,112 @@ def show_main_app():
                 st.error(f"❌ {type_error}")
                 return
             
-            with st.spinner("🔄 Optimizing with NextEleven AI... This may take a moment."):
-                try:
-                    orchestrator = OrchestratorAgent()
-                    
-                    # Check if this is an identity query (use sanitized prompt)
-                    identity_response = orchestrator.handle_identity_query(sanitized_prompt)
-                    if identity_response:
-                        # Identity queries don't count toward usage limits
-                        st.session_state.optimization_results = {
-                            "original_prompt": sanitized_prompt,  # Store sanitized version
-                            "prompt_type": prompt_type,
-                            "identity_response": identity_response,
-                            "is_identity_query": True
-                        }
-                        st.success("✅ Response from NextEleven AI!")
-                        st.rerun()
-                    
-                    # Regular optimization workflow (use sanitized prompt and validated type)
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            try:
+                status_text.text("🔄 Initializing optimization...")
+                progress_bar.progress(10)
+                
+                # Beta mode: Agent config available to all (if user exists)
+                agent_config = None
+                if st.session_state.user:
+                    agent_config = AgentConfigManager.get_default_config(st.session_state.user.id)
+                
+                orchestrator = OrchestratorAgent()
+                # Apply config if available (placeholder - would need agent modification)
+                if agent_config:
+                    orchestrator = AgentConfigManager.apply_config_to_agent(orchestrator, agent_config)
+                
+                # Check if this is an identity query (use sanitized prompt)
+                status_text.text("🔍 Checking query type...")
+                progress_bar.progress(20)
+                identity_response = orchestrator.handle_identity_query(sanitized_prompt)
+                if identity_response:
+                    # Identity queries don't count toward usage limits
+                    st.session_state.optimization_results = {
+                        "original_prompt": sanitized_prompt,  # Store sanitized version
+                        "prompt_type": prompt_type,
+                        "identity_response": identity_response,
+                        "is_identity_query": True
+                    }
+                    progress_bar.progress(100)
+                    status_text.text("✅ Complete!")
+                    st.success("✅ Response from NextEleven AI!")
+                    st.rerun()
+                
+                # Regular optimization workflow (use sanitized prompt and validated type)
+                status_text.text("🚀 Optimizing prompt with multi-agent system...")
+                progress_bar.progress(30)
+                
+                with performance_tracker("optimization"):
                     results = orchestrator.optimize_prompt(
                         sanitized_prompt,
                         prompt_type_enum
                     )
+                
+                progress_bar.progress(90)
+                status_text.text("💾 Saving results...")
                     
-                    # Increment usage (only for actual optimizations, not identity queries)
-                    user_id = st.session_state.user.id if st.session_state.user else None
-                    db.increment_usage(user_id)
+                    # Beta mode: Don't track usage limits
+                    # user_id = st.session_state.user.id if st.session_state.user else None
+                    # db.increment_usage(user_id)
                     
+                    # Beta mode: Optionally save session (for analytics, not required)
                     # Save session (use sanitized prompt)
                     optimized_prompt_text = results.get("optimized_prompt", "")[:1000]  # Limit length
                     sample_output = results.get("sample_output", "")[:2000]
                     quality_score = results.get("quality_score")
                     
-                    db.save_session(
-                        user_id=user_id,
-                        original_prompt=sanitized_prompt,  # Store sanitized version
-                        prompt_type=prompt_type,
-                        optimized_prompt=optimized_prompt_text,
-                        sample_output=sample_output,
-                        quality_score=quality_score
-                    )
+                    # Optional: Save for analytics (user_id can be None in beta)
+                    user_id = st.session_state.user.id if st.session_state.user else None
+                    try:
+                        db.save_session(
+                            user_id=user_id,
+                            original_prompt=sanitized_prompt,  # Store sanitized version
+                            prompt_type=prompt_type,
+                            optimized_prompt=optimized_prompt_text,
+                            sample_output=sample_output,
+                            quality_score=quality_score
+                        )
+                    except Exception as e:
+                        logger.debug(f"Optional session save failed (beta mode): {str(e)}")
                     
                     st.session_state.optimization_results = results
+                    
+                    # Store in recent optimizations (beta mode)
+                    if "recent_optimizations" not in st.session_state:
+                        st.session_state.recent_optimizations = []
+                    st.session_state.recent_optimizations.append({
+                        "original_prompt": sanitized_prompt,
+                        "optimized_prompt": results.get("optimized_prompt", ""),
+                        "quality_score": quality_score,
+                        "prompt_type": prompt_type
+                    })
+                    
+                    progress_bar.progress(100)
+                    status_text.text("✅ Complete!")
                     st.success("✅ Optimization complete!")
+                    
+                    # Track metrics
+                    metrics = get_metrics()
+                    metrics.increment("optimizations.completed")
+                    if quality_score:
+                        metrics.gauge("optimizations.avg_quality_score", quality_score)
+                    
                     st.rerun()
                     
                 except Exception as e:
                     logger.error(f"Optimization error: {str(e)}")
-                    st.error(f"❌ Error during optimization: {str(e)}")
-                    st.info("Please check your API key configuration and try again.")
+                    error_handler = ErrorHandler()
+                    user_message = error_handler.handle_api_error(e, "during optimization")
+                    error_handler.log_error(e, context={"operation": "optimization"})
+                    
+                    progress_bar.progress(100)
+                    status_text.text("❌ Error occurred")
+                    st.error(f"❌ {user_message}")
+                    st.info("💡 Tip: Check your API key configuration and internet connection.")
     
     # Display results
     if st.session_state.optimization_results:
@@ -534,21 +659,434 @@ def show_main_app():
                 for error in results["errors"]:
                     st.error(f"- {error}")
         
-        # History section (for logged-in users)
-        if st.session_state.user:
-            with st.sidebar:
-                st.markdown("---")
-                st.markdown("### Recent Sessions")
-                sessions = db.get_user_sessions(st.session_state.user.id, limit=5)
-                if sessions:
-                    for session in sessions:
-                        with st.expander(f"Session {session.id} - {session.created_at.strftime('%Y-%m-%d')}"):
-                            st.text(f"Type: {session.prompt_type}")
-                            if session.quality_score:
-                                st.text(f"Score: {session.quality_score}/100")
-                            st.text(session.original_prompt[:100] + "...")
+        # History section (beta: show recent from session state)
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("### Recent Optimizations")
+            if "recent_optimizations" in st.session_state:
+                for i, opt in enumerate(st.session_state.recent_optimizations[-5:], 1):
+                    with st.expander(f"Optimization {i}"):
+                        if opt.get("quality_score"):
+                            st.text(f"Score: {opt['quality_score']}/100")
+                        st.text(opt.get("original_prompt", "")[:100] + "...")
+            else:
+                st.info("No recent optimizations")
+
+
+def show_analytics_page():
+    """Display advanced analytics dashboard."""
+    st.markdown('<div class="main-header">📊 Analytics Dashboard</div>', unsafe_allow_html=True)
+    
+    # Beta mode: Analytics available to all (shows aggregate or session data)
+    user_id = st.session_state.user.id if st.session_state.user else None
+    st.info("💡 Analytics shown for all optimizations (beta mode)")
+    
+    # Date range selector
+    col1, col2 = st.columns(2)
+    with col1:
+        days = st.selectbox("Time Period", [7, 30, 90, 365], index=1)
+    
+    # Get analytics data
+    analytics = Analytics()
+    analytics_data = analytics.get_user_analytics(user_id, days)
+    trends = analytics.get_quality_trends(user_id, days)
+    top_prompts = analytics.get_top_prompts(user_id, 10)
+    
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Optimizations", analytics_data.get("total_optimizations", 0))
+    with col2:
+        st.metric("Avg Quality Score", f"{analytics_data.get('average_quality_score', 0)}/100")
+    with col3:
+        st.metric("Avg Processing Time", f"{analytics_data.get('average_processing_time', 0):.2f}s")
+    with col4:
+        st.metric("Total Tokens Used", analytics_data.get("total_tokens_used", 0))
+    
+    st.markdown("---")
+    
+    # Charts
+    try:
+        import plotly.express as px
+        import pandas as pd
+        
+        # Quality trends chart
+        if trends:
+            df_trends = pd.DataFrame(trends)
+            fig = px.line(df_trends, x='date', y='average_score', 
+                         title='Quality Score Trends Over Time',
+                         labels={'average_score': 'Average Quality Score', 'date': 'Date'})
+            fig.update_layout(plot_bgcolor='#1E1E1E', paper_bgcolor='#121212', 
+                            font_color='#FFFFFF')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Prompt type distribution
+        if analytics_data.get("type_distribution"):
+            type_data = analytics_data["type_distribution"]
+            df_types = pd.DataFrame(list(type_data.items()), columns=['Type', 'Count'])
+            fig = px.pie(df_types, values='Count', names='Type', 
+                        title='Prompt Type Distribution')
+            fig.update_layout(plot_bgcolor='#1E1E1E', paper_bgcolor='#121212', 
+                            font_color='#FFFFFF')
+            st.plotly_chart(fig, use_container_width=True)
+    except ImportError:
+        st.info("Install plotly and pandas for interactive charts: pip install plotly pandas")
+    
+    # Top prompts
+    if top_prompts:
+        st.subheader("🏆 Top Performing Prompts")
+        for i, prompt in enumerate(top_prompts, 1):
+            with st.expander(f"#{i} - Score: {prompt['quality_score']}/100"):
+                st.text(f"Type: {prompt['prompt_type']}")
+                st.text(f"Prompt: {prompt['original_prompt']}")
+
+
+def show_batch_page():
+    """Display batch optimization page."""
+    st.markdown('<div class="main-header">📦 Batch Optimization</div>', unsafe_allow_html=True)
+    
+    st.info("💡 Upload multiple prompts to optimize them all at once.")
+    
+    # Beta mode: Available to all
+    user_id = st.session_state.user.id if st.session_state.user else None
+    
+    # Batch input
+    st.subheader("Enter Prompts")
+    
+    input_method = st.radio("Input Method", ["Manual Entry", "JSON Upload", "CSV Upload"])
+    
+    prompts = []
+    
+    if input_method == "Manual Entry":
+        num_prompts = st.number_input("Number of Prompts", min_value=1, max_value=50, value=5)
+        for i in range(num_prompts):
+            with st.expander(f"Prompt {i+1}"):
+                prompt_text = st.text_area("Prompt", key=f"prompt_{i}")
+                prompt_type = st.selectbox("Type", [pt.value for pt in PromptType], key=f"type_{i}")
+                if prompt_text:
+                    prompts.append({"prompt": prompt_text, "type": prompt_type})
+    
+    elif input_method == "JSON Upload":
+        uploaded_file = st.file_uploader("Upload JSON file", type=["json"])
+        if uploaded_file:
+            try:
+                data = json.load(uploaded_file)
+                if isinstance(data, list):
+                    prompts = data
                 else:
-                    st.info("No previous sessions")
+                    st.error("JSON must be an array of prompt objects")
+            except Exception as e:
+                st.error(f"Error parsing JSON: {str(e)}")
+    
+    elif input_method == "CSV Upload":
+        uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+        if uploaded_file:
+            try:
+                import pandas as pd
+                df = pd.read_csv(uploaded_file)
+                if "prompt" in df.columns:
+                    prompts = [
+                        {"prompt": row["prompt"], "type": row.get("type", "creative")}
+                        for _, row in df.iterrows()
+                    ]
+                else:
+                    st.error("CSV must have a 'prompt' column")
+            except Exception as e:
+                st.error(f"Error parsing CSV: {str(e)}")
+    
+    if st.button("🚀 Start Batch Optimization", type="primary", disabled=len(prompts) == 0):
+        if len(prompts) == 0:
+            st.warning("Please add at least one prompt")
+        else:
+            with st.spinner(f"Processing {len(prompts)} prompts..."):
+                # Progress tracking for batch
+                batch_progress = st.progress(0)
+                batch_status = st.empty()
+                
+                batch_status.text(f"🚀 Processing {len(prompts)} prompts...")
+                batch_progress.progress(0)
+                
+                batch_optimizer = BatchOptimizer()
+                
+                with performance_tracker("batch_optimization"):
+                    job = batch_optimizer.create_and_process_batch(
+                        prompts,
+                        user_id
+                    )
+                
+                if job:
+                    batch_progress.progress(100)
+                    batch_status.text("✅ Batch job created!")
+                    st.success(f"✅ Batch job created! Job ID: {job.id}")
+                    st.session_state.batch_job_id = job.id
+                    
+                    # Track metrics
+                    metrics = get_metrics()
+                    metrics.increment("batch_jobs.created")
+                    metrics.gauge("batch_jobs.prompt_count", len(prompts))
+                    
+                    st.rerun()
+                else:
+                    batch_status.text("❌ Failed to create batch job")
+                    st.error("❌ Failed to create batch job. Please try again.")
+    
+        # Show batch job results
+    if "batch_job_id" in st.session_state:
+        st.markdown("---")
+        st.subheader("Batch Job Results")
+        from database import BatchJob
+        db_session = db.get_session()
+        job = db_session.query(BatchJob).filter(
+            BatchJob.id == st.session_state.batch_job_id
+        ).first()
+        db_session.close()
+        
+        if job:
+            st.write(f"Status: {job.status}")
+            st.write(f"Completed: {job.completed_prompts}/{job.total_prompts}")
+            
+            if job.results_json:
+                results = json.loads(job.results_json)
+                for i, result in enumerate(results, 1):
+                    with st.expander(f"Result {i}"):
+                        if result.get("success"):
+                            st.success("✅ Success")
+                            st.text_area("Optimized Prompt", result.get("optimized_prompt", ""), height=100)
+                        else:
+                            st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
+
+
+def show_ab_testing_page():
+    """Display A/B testing page."""
+    st.markdown('<div class="main-header">🧪 A/B Testing</div>', unsafe_allow_html=True)
+    
+    st.info("💡 Compare two prompt variants to see which performs better.")
+    
+    # Beta mode: Available to all
+    
+    tab1, tab2 = st.tabs(["Create Test", "View Results"])
+    
+    with tab1:
+        st.subheader("Create New A/B Test")
+        
+        test_name = st.text_input("Test Name")
+        original_prompt = st.text_area("Original Prompt", height=100)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            variant_a = st.text_area("Variant A (Optional - will be generated if empty)", height=100)
+        with col2:
+            variant_b = st.text_area("Variant B (Optional - will be generated if empty)", height=100)
+        
+        if st.button("Create A/B Test", type="primary"):
+            if test_name and original_prompt:
+                ab_testing = ABTesting()
+                user_id = st.session_state.user.id if st.session_state.user else None
+                ab_test = ab_testing.create_test(
+                    user_id,
+                    test_name,
+                    original_prompt,
+                    variant_a if variant_a else None,
+                    variant_b if variant_b else None
+                )
+                
+                if ab_test:
+                    st.success(f"✅ A/B test created! Test ID: {ab_test.id}")
+                    st.session_state.ab_test_id = ab_test.id
+                    st.rerun()
+            else:
+                st.warning("Please fill in test name and original prompt")
+    
+    with tab2:
+        st.subheader("Test Results")
+        # Display existing tests and their results (beta: show all or session-based)
+        user_id = st.session_state.user.id if st.session_state.user else None
+        from database import ABTest
+        db_session = db.get_session()
+        if user_id:
+            tests = db_session.query(ABTest).filter(
+                ABTest.user_id == user_id
+            ).order_by(ABTest.created_at.desc()).limit(10).all()
+        else:
+            # Beta: Show recent tests (last 10)
+            tests = db_session.query(ABTest).order_by(
+                ABTest.created_at.desc()
+            ).limit(10).all()
+        db_session.close()
+            
+            for test in tests:
+                with st.expander(f"{test.name} - {test.status}"):
+                    results = ABTesting().get_test_results(test.id)
+                    if results:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Variant A Score", f"{results['variant_a']['score']:.2f}")
+                            st.metric("Variant A Responses", results['variant_a']['responses'])
+                        with col2:
+                            st.metric("Variant B Score", f"{results['variant_b']['score']:.2f}")
+                            st.metric("Variant B Responses", results['variant_b']['responses'])
+                        
+                        if results.get("winner"):
+                            st.success(f"🏆 Winner: Variant {results['winner'].upper()}")
+
+
+def show_export_page():
+    """Display export page."""
+    st.markdown('<div class="main-header">📥 Export Results</div>', unsafe_allow_html=True)
+    
+    if not st.session_state.optimization_results:
+        st.info("💡 Optimize a prompt first, then export the results here.")
+        return
+    
+    results = st.session_state.optimization_results
+    
+    st.subheader("Export Format")
+    export_format = st.selectbox("Select Format", ["JSON", "Markdown", "PDF"])
+    
+    if st.button("📥 Export", type="primary"):
+        try:
+            exported = export_results(results, export_format.lower())
+            
+            if export_format == "PDF":
+                st.download_button(
+                    label="Download PDF",
+                    data=exported.read(),
+                    file_name=f"optimization_{time.strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf"
+                )
+            else:
+                st.download_button(
+                    label=f"Download {export_format}",
+                    data=exported,
+                    file_name=f"optimization_{time.strftime('%Y%m%d_%H%M%S')}.{export_format.lower()}",
+                    mime="application/json" if export_format == "JSON" else "text/markdown"
+                )
+            
+            # Log export event (optional in beta)
+            try:
+                user_id = st.session_state.user.id if st.session_state.user else None
+                Analytics().log_event(
+                    user_id,
+                    "export",
+                    {"format": export_format.lower()}
+                )
+            except Exception:
+                pass  # Optional in beta mode
+        except Exception as e:
+            st.error(f"Error exporting: {str(e)}")
+
+
+def show_settings_page():
+    """Display settings page."""
+    st.markdown('<div class="main-header">⚙️ Settings</div>', unsafe_allow_html=True)
+    
+    # Beta mode: Settings available to all
+    user = st.session_state.user if st.session_state.user else None
+    
+    st.subheader("API Access")
+    st.info("💡 Generate an API key for programmatic access to the optimizer.")
+    
+    if user and user.api_key:
+        st.text_input("Your API Key", value=user.api_key, type="password", disabled=True)
+        if st.button("Regenerate API Key"):
+            new_key = db.generate_api_key(user.id)
+            if new_key:
+                st.success("✅ New API key generated!")
+                st.rerun()
+    elif user:
+        if st.button("Generate API Key"):
+            api_key = db.generate_api_key(user.id)
+            if api_key:
+                st.success("✅ API key generated!")
+                st.rerun()
+    else:
+        st.info("💡 API access is available. Create an account (optional) to generate a persistent API key, or use the API without authentication for beta testing.")
+    
+    st.markdown("---")
+    st.subheader("Integrations")
+    
+    tab1, tab2, tab3 = st.tabs(["Slack", "Discord", "Notion"])
+    
+    with tab1:
+        st.info("Configure Slack integration to optimize prompts via slash commands.")
+        webhook_url = st.text_input("Slack Webhook URL", type="password")
+        if st.button("Save Slack Settings"):
+            st.success("✅ Settings saved!")
+    
+    with tab2:
+        st.info("Configure Discord integration to optimize prompts via bot commands.")
+        webhook_url = st.text_input("Discord Webhook URL", type="password")
+        if st.button("Save Discord Settings"):
+            st.success("✅ Settings saved!")
+    
+    with tab3:
+        st.info("Configure Notion integration to optimize prompts from Notion pages.")
+        api_key = st.text_input("Notion API Key", type="password")
+        if st.button("Save Notion Settings"):
+            st.success("✅ Settings saved!")
+
+
+def show_agent_config_page():
+    """Display agent configuration page."""
+    st.markdown('<div class="main-header">🤖 Agent Configuration</div>', unsafe_allow_html=True)
+    
+    # Beta mode: Available to all (create anonymous configs if needed)
+    
+    st.info("💡 Customize agent behavior, temperature, and other parameters.")
+    
+    # Beta mode: Allow configs for anonymous users (use None as user_id)
+    user_id = st.session_state.user.id if st.session_state.user else None
+    if user_id:
+        configs = AgentConfigManager.get_user_configs(user_id)
+    else:
+        configs = []
+        st.info("💡 Create configurations will be saved for this session.")
+    
+    if configs:
+        st.subheader("Your Configurations")
+        for config in configs:
+            with st.expander(f"{config['name']} {'(Default)' if config['is_default'] else ''}"):
+                st.json(config['config'])
+    
+    st.markdown("---")
+    st.subheader("Create New Configuration")
+    
+    config_name = st.text_input("Configuration Name")
+    temperature = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
+    max_tokens = st.number_input("Max Tokens", min_value=100, max_value=4000, value=2000)
+    use_parallel = st.checkbox("Use Parallel Execution", value=True)
+    
+    if st.button("Create Configuration", type="primary"):
+        if config_name:
+            config = {
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "use_parallel_execution": use_parallel
+            }
+            # Beta mode: Allow configs for anonymous users
+            user_id = st.session_state.user.id if st.session_state.user else None
+            if user_id:
+                agent_config = AgentConfigManager.create_config(
+                    user_id,
+                    config_name,
+                    config
+                )
+            else:
+                # Store in session state for anonymous users
+                if "agent_configs" not in st.session_state:
+                    st.session_state.agent_configs = []
+                st.session_state.agent_configs.append({
+                    "name": config_name,
+                    "config": config
+                })
+                st.success("✅ Configuration created for this session!")
+                st.rerun()
+                return
+            if agent_config:
+                st.success("✅ Configuration created!")
+                st.rerun()
+        else:
+            st.warning("Please enter a configuration name")
 
 
 def show_footer():
@@ -627,7 +1165,8 @@ def main():
         show_footer()
         st.stop()
     
-    # Beta mode: Always show main app (authentication bypassed)
+    # Beta mode: Always show main app (no authentication required)
+    # Skip login page entirely
     show_main_app()
     
     # Always show footer

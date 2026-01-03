@@ -6,9 +6,13 @@ Uses direct HTTP requests with httpx - verified working approach as of Jan 2026.
 """
 import json
 import logging
+import hashlib
 from typing import Dict, List, Optional, Any
 import httpx
 from config import settings
+from performance import HTTPConnectionPool
+from cache_utils import cached, get_cache
+from monitoring import get_metrics, track_performance
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,7 @@ class GrokAPI:
         self.model = settings.xai_model
         self.timeout = timeout
     
+    @track_performance("grok_api.generate_completion")
     def generate_completion(
         self,
         prompt: str,
@@ -51,7 +56,8 @@ class GrokAPI:
         max_tokens: int = 2000,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[str] = None,
-        enforce_persona: bool = True
+        enforce_persona: bool = True,
+        use_cache: bool = True
     ) -> Dict[str, Any]:
         """
         Generate a completion using Grok API.
@@ -64,10 +70,30 @@ class GrokAPI:
             tools: Optional list of tool definitions for agent capabilities
             tool_choice: Tool choice strategy ("auto", "required", or specific tool name)
             enforce_persona: Whether to enforce NextEleven AI persona (default: True)
+            use_cache: Whether to use cached results for identical prompts (default: True)
         
         Returns:
             Dictionary with response content and metadata
         """
+        # Check cache first (for non-tool calls)
+        if use_cache and not tools:
+            cache = get_cache()
+            cache_key = f"completion:{hashlib.sha256(json.dumps({
+                'prompt': prompt,
+                'system_prompt': system_prompt,
+                'temperature': temperature,
+                'max_tokens': max_tokens
+            }, sort_keys=True).encode()).hexdigest()}"
+            cached_result = cache.get(cache_key)
+            if cached_result:
+                logger.debug("Cache hit for API completion")
+                metrics = get_metrics()
+                metrics.increment("api_cache_hits")
+                return cached_result
+        
+        metrics = get_metrics()
+        metrics.increment("api_requests")
+        
         try:
             messages = []
             
@@ -106,7 +132,10 @@ class GrokAPI:
             
             logger.debug(f"Making API request to {url} with model {self.model}")
             
-            with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
+            # Use connection pooling for better performance
+            metrics = get_metrics()
+            with metrics.time_block("api_request"):
+                client = HTTPConnectionPool.get_client(self.base_url, self.timeout)
                 response = client.post(url, json=payload, headers=headers)
                 
                 # Log response status
@@ -209,6 +238,18 @@ class GrokAPI:
             }
             
             logger.debug(f"Successfully parsed API response. Content length: {len(content)}")
+            
+            # Cache result if caching enabled and no tools used
+            if use_cache and not tools:
+                cache = get_cache()
+                cache_key = f"completion:{hashlib.sha256(json.dumps({
+                    'prompt': prompt,
+                    'system_prompt': system_prompt,
+                    'temperature': temperature,
+                    'max_tokens': max_tokens
+                }, sort_keys=True).encode()).hexdigest()}"
+                cache.set(cache_key, result, ttl=3600)  # Cache for 1 hour
+            
             return result
             
         except Exception as e:

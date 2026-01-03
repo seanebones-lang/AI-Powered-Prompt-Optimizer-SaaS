@@ -5,12 +5,13 @@ Handles user authentication, session history, and usage tracking.
 import logging
 from datetime import datetime, date
 from typing import Optional, List, Dict
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, Float, JSON, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.exc import SQLAlchemyError
 from config import settings
 import bcrypt
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,13 @@ class User(Base):
     is_premium = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     subscription_expires_at = Column(DateTime, nullable=True)
+    api_key = Column(String(255), unique=True, nullable=True, index=True)  # For API access
     
     # Relationships
     sessions = relationship("OptimizationSession", back_populates="user")
+    agent_configs = relationship("AgentConfig", back_populates="user")
+    batch_jobs = relationship("BatchJob", back_populates="user")
+    ab_tests = relationship("ABTest", back_populates="user")
 
 
 class OptimizationSession(Base):
@@ -46,9 +51,18 @@ class OptimizationSession(Base):
     sample_output = Column(Text, nullable=True)
     quality_score = Column(Integer, nullable=True)  # 0-100
     created_at = Column(DateTime, default=datetime.utcnow)
+    deconstruction = Column(Text, nullable=True)
+    diagnosis = Column(Text, nullable=True)
+    evaluation = Column(Text, nullable=True)
+    tokens_used = Column(Integer, nullable=True)
+    processing_time = Column(Float, nullable=True)  # seconds
+    agent_config_id = Column(Integer, ForeignKey("agent_configs.id"), nullable=True)
+    ab_test_id = Column(Integer, ForeignKey("ab_tests.id"), nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="sessions")
+    agent_config = relationship("AgentConfig", back_populates="sessions")
+    ab_test = relationship("ABTest", back_populates="sessions")
 
 
 class DailyUsage(Base):
@@ -64,6 +78,78 @@ class DailyUsage(Base):
     __table_args__ = (
         {"sqlite_autoincrement": True},
     )
+
+
+class AgentConfig(Base):
+    """Model for custom agent configurations (premium feature)."""
+    __tablename__ = "agent_configs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    config_json = Column(Text, nullable=False)  # JSON string with agent settings
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="agent_configs")
+    sessions = relationship("OptimizationSession", back_populates="agent_config")
+
+
+class BatchJob(Base):
+    """Model for batch optimization jobs."""
+    __tablename__ = "batch_jobs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    name = Column(String(200), nullable=True)
+    status = Column(String(50), default="pending")  # pending, processing, completed, failed
+    total_prompts = Column(Integer, default=0)
+    completed_prompts = Column(Integer, default=0)
+    failed_prompts = Column(Integer, default=0)
+    prompts_json = Column(Text, nullable=False)  # JSON array of prompts
+    results_json = Column(Text, nullable=True)  # JSON array of results
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="batch_jobs")
+
+
+class ABTest(Base):
+    """Model for A/B testing prompt variants."""
+    __tablename__ = "ab_tests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    name = Column(String(200), nullable=False)
+    original_prompt = Column(Text, nullable=False)
+    variant_a = Column(Text, nullable=True)
+    variant_b = Column(Text, nullable=True)
+    status = Column(String(50), default="active")  # active, completed, paused
+    variant_a_score = Column(Float, nullable=True)
+    variant_b_score = Column(Float, nullable=True)
+    variant_a_responses = Column(Integer, default=0)
+    variant_b_responses = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="ab_tests")
+    sessions = relationship("OptimizationSession", back_populates="ab_test")
+
+
+class AnalyticsEvent(Base):
+    """Model for analytics events tracking."""
+    __tablename__ = "analytics_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    event_type = Column(String(100), nullable=False)  # optimization, export, api_call, etc.
+    event_data = Column(Text, nullable=True)  # JSON string
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Database:
@@ -165,43 +251,8 @@ class Database:
     
     def check_usage_limit(self, user_id: Optional[int]) -> bool:
         """Check if user has reached daily usage limit."""
-        db = self.get_session()
-        try:
-            # For anonymous users (user_id is None), use free tier limit
-            if user_id is None:
-                daily_limit = settings.free_tier_daily_limit
-                today = date.today()
-                usage = db.query(DailyUsage).filter(
-                    DailyUsage.user_id.is_(None),
-                    DailyUsage.date == today
-                ).first()
-            else:
-                user = db.query(User).filter(User.id == user_id).first()
-                if not user:
-                    return False  # User doesn't exist
-                
-                is_premium = user.is_premium if user else False
-                daily_limit = (
-                    settings.paid_tier_daily_limit if is_premium
-                    else settings.free_tier_daily_limit
-                )
-                
-                today = date.today()
-                usage = db.query(DailyUsage).filter(
-                    DailyUsage.user_id == user_id,
-                    DailyUsage.date == today
-                ).first()
-            
-            if not usage:
-                return True  # No usage today, within limit
-            
-            # Check if usage is less than limit (not <=)
-            return usage.usage_count < daily_limit
-        except SQLAlchemyError as e:
-            logger.error(f"Error checking usage limit: {str(e)}")
-            return False  # Fail closed - deny if we can't verify
-        finally:
-            db.close()
+        # Beta mode: No usage limits
+        return True
     
     def increment_usage(self, user_id: Optional[int]):
         """Increment daily usage count."""
@@ -275,6 +326,276 @@ class Database:
             ).order_by(
                 OptimizationSession.created_at.desc()
             ).limit(limit).all()
+        finally:
+            db.close()
+    
+    def generate_api_key(self, user_id: int) -> Optional[str]:
+        """Generate a unique API key for a user."""
+        import secrets
+        db = self.get_session()
+        try:
+            api_key = f"pk_{secrets.token_urlsafe(32)}"
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.api_key = api_key
+                db.commit()
+                return api_key
+            return None
+        except SQLAlchemyError as e:
+            logger.error(f"Error generating API key: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_user_by_api_key(self, api_key: str) -> Optional[User]:
+        """Get user by API key."""
+        db = self.get_session()
+        try:
+            return db.query(User).filter(User.api_key == api_key).first()
+        finally:
+            db.close()
+    
+    def create_agent_config(
+        self,
+        user_id: int,
+        name: str,
+        config_json: str,
+        description: Optional[str] = None,
+        is_default: bool = False
+    ) -> Optional[AgentConfig]:
+        """Create a custom agent configuration."""
+        db = self.get_session()
+        try:
+            # If setting as default, unset other defaults
+            if is_default:
+                db.query(AgentConfig).filter(
+                    AgentConfig.user_id == user_id,
+                    AgentConfig.is_default == True
+                ).update({"is_default": False})
+            
+            config = AgentConfig(
+                user_id=user_id,
+                name=name,
+                description=description,
+                config_json=config_json,
+                is_default=is_default
+            )
+            db.add(config)
+            db.commit()
+            db.refresh(config)
+            return config
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating agent config: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_agent_configs(self, user_id: int) -> List[AgentConfig]:
+        """Get all agent configurations for a user."""
+        db = self.get_session()
+        try:
+            return db.query(AgentConfig).filter(
+                AgentConfig.user_id == user_id
+            ).order_by(AgentConfig.is_default.desc(), AgentConfig.created_at.desc()).all()
+        finally:
+            db.close()
+    
+    def get_default_agent_config(self, user_id: int) -> Optional[AgentConfig]:
+        """Get default agent configuration for a user."""
+        db = self.get_session()
+        try:
+            return db.query(AgentConfig).filter(
+                AgentConfig.user_id == user_id,
+                AgentConfig.is_default == True
+            ).first()
+        finally:
+            db.close()
+    
+    def create_batch_job(
+        self,
+        user_id: Optional[int],
+        prompts_json: str,
+        name: Optional[str] = None
+    ) -> Optional[BatchJob]:
+        """Create a batch optimization job."""
+        db = self.get_session()
+        try:
+            prompts = json.loads(prompts_json)
+            job = BatchJob(
+                user_id=user_id,
+                name=name or f"Batch Job {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+                prompts_json=prompts_json,
+                total_prompts=len(prompts),
+                status="pending"
+            )
+            db.add(job)
+            db.commit()
+            db.refresh(job)
+            return job
+        except (SQLAlchemyError, json.JSONDecodeError) as e:
+            logger.error(f"Error creating batch job: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def update_batch_job(
+        self,
+        job_id: int,
+        status: Optional[str] = None,
+        completed_prompts: Optional[int] = None,
+        failed_prompts: Optional[int] = None,
+        results_json: Optional[str] = None
+    ) -> Optional[BatchJob]:
+        """Update a batch job."""
+        db = self.get_session()
+        try:
+            job = db.query(BatchJob).filter(BatchJob.id == job_id).first()
+            if not job:
+                return None
+            
+            if status:
+                job.status = status
+            if completed_prompts is not None:
+                job.completed_prompts = completed_prompts
+            if failed_prompts is not None:
+                job.failed_prompts = failed_prompts
+            if results_json:
+                job.results_json = results_json
+            if status == "completed":
+                job.completed_at = datetime.utcnow()
+            
+            db.commit()
+            db.refresh(job)
+            return job
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating batch job: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def create_ab_test(
+        self,
+        user_id: Optional[int],
+        name: str,
+        original_prompt: str,
+        variant_a: Optional[str] = None,
+        variant_b: Optional[str] = None
+    ) -> Optional[ABTest]:
+        """Create an A/B test."""
+        db = self.get_session()
+        try:
+            ab_test = ABTest(
+                user_id=user_id,
+                name=name,
+                original_prompt=original_prompt,
+                variant_a=variant_a,
+                variant_b=variant_b,
+                status="active"
+            )
+            db.add(ab_test)
+            db.commit()
+            db.refresh(ab_test)
+            return ab_test
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating A/B test: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def update_ab_test_results(
+        self,
+        ab_test_id: int,
+        variant: str,  # 'a' or 'b'
+        score: float
+    ) -> Optional[ABTest]:
+        """Update A/B test results."""
+        db = self.get_session()
+        try:
+            ab_test = db.query(ABTest).filter(ABTest.id == ab_test_id).first()
+            if not ab_test:
+                return None
+            
+            if variant == 'a':
+                ab_test.variant_a_score = score
+                ab_test.variant_a_responses += 1
+            elif variant == 'b':
+                ab_test.variant_b_score = score
+                ab_test.variant_b_responses += 1
+            
+            db.commit()
+            db.refresh(ab_test)
+            return ab_test
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating A/B test: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def log_analytics_event(
+        self,
+        user_id: Optional[int],
+        event_type: str,
+        event_data: Optional[Dict] = None
+    ):
+        """Log an analytics event."""
+        db = self.get_session()
+        try:
+            event = AnalyticsEvent(
+                user_id=user_id,
+                event_type=event_type,
+                event_data=json.dumps(event_data) if event_data else None
+            )
+            db.add(event)
+            db.commit()
+        except SQLAlchemyError as e:
+            logger.error(f"Error logging analytics event: {str(e)}")
+            db.rollback()
+        finally:
+            db.close()
+    
+    def get_analytics_data(
+        self,
+        user_id: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Dict:
+        """Get analytics data for dashboard."""
+        db = self.get_session()
+        try:
+            query = db.query(AnalyticsEvent)
+            if user_id:
+                query = query.filter(AnalyticsEvent.user_id == user_id)
+            if start_date:
+                query = query.filter(AnalyticsEvent.created_at >= datetime.combine(start_date, datetime.min.time()))
+            if end_date:
+                query = query.filter(AnalyticsEvent.created_at <= datetime.combine(end_date, datetime.max.time()))
+            
+            events = query.all()
+            
+            # Aggregate data
+            total_optimizations = db.query(OptimizationSession).filter(
+                OptimizationSession.user_id == user_id if user_id else True
+            ).count()
+            
+            avg_quality_score = db.query(
+                func.avg(OptimizationSession.quality_score)
+            ).filter(
+                OptimizationSession.user_id == user_id if user_id else True,
+                OptimizationSession.quality_score.isnot(None)
+            ).scalar() or 0
+            
+            return {
+                "total_events": len(events),
+                "total_optimizations": total_optimizations,
+                "avg_quality_score": round(float(avg_quality_score), 2),
+                "events_by_type": {}
+            }
         finally:
             db.close()
 
