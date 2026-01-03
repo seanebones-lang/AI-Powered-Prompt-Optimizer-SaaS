@@ -1,0 +1,695 @@
+"""
+Multi-agent system for prompt optimization.
+Implements Lyra's 4-D methodology: Deconstruct, Diagnose, Design, Deliver.
+Each agent has a specific role with clear schemas and error handling.
+
+Enhanced with dynamic workflow orchestration, parallel execution, and retry logic.
+"""
+import logging
+import time
+from typing import Dict, List, Optional, Any, Callable
+from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pydantic import BaseModel, Field
+from api_utils import grok_api
+from collections_utils import enable_collections_for_agent, is_collections_enabled
+from config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class PromptType(str, Enum):
+    """Supported prompt types."""
+    CREATIVE = "creative"
+    TECHNICAL = "technical"
+    ANALYTICAL = "analytical"
+    EDUCATIONAL = "educational"
+    MARKETING = "marketing"
+
+
+class AgentOutput(BaseModel):
+    """Standard output format for all agents."""
+    success: bool = Field(description="Whether the operation was successful")
+    content: str = Field(description="The main output content")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    errors: List[str] = Field(default_factory=list, description="Any errors encountered")
+
+
+class DeconstructorAgent:
+    """Agent responsible for deconstructing vague inputs into structured components."""
+    
+    def __init__(self):
+        self.name = "Deconstructor"
+        self.role = "Break down vague or unstructured prompts into clear, analyzable components"
+    
+    def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+        """Deconstruct a prompt into components."""
+        try:
+            system_prompt = f"""As NextEleven AI's Deconstructor specialist, your role is to break down vague or unstructured prompts into clear, analyzable components.
+
+Analyze the following {prompt_type.value} prompt and identify:
+1. Core intent/purpose
+2. Key entities and concepts
+3. Desired output format
+4. Missing information or ambiguities
+5. Context requirements
+
+Provide a structured breakdown in a clear, organized format."""
+            
+            user_prompt = f"Deconstruct the following prompt:\n\n{prompt}"
+            
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.5,
+                max_tokens=1500
+            )
+            
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={
+                    "tokens_used": response["usage"]["total_tokens"],
+                    "model": response["model"]
+                }
+            )
+        except Exception as e:
+            logger.error(f"Deconstructor error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+
+
+class DiagnoserAgent:
+    """Agent responsible for diagnosing issues in prompts."""
+    
+    def __init__(self):
+        self.name = "Diagnoser"
+        self.role = "Identify weaknesses, ambiguities, and potential issues in prompts"
+    
+    def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
+        """Diagnose issues in a prompt."""
+        try:
+            system_prompt = f"""As NextEleven AI's Diagnoser specialist, your role is to identify weaknesses and issues in prompts.
+
+Analyze the prompt and its deconstruction to identify:
+1. Ambiguities and unclear instructions
+2. Missing context or information
+3. Potential misinterpretations
+4. Lack of specificity
+5. Formatting or structure issues
+6. Best practices violations
+
+For {prompt_type.value} prompts, focus on type-specific concerns."""
+            
+            user_prompt = f"""Original Prompt:
+{prompt}
+
+Deconstruction:
+{deconstruction}
+
+Identify all issues and weaknesses in this prompt. Be specific and actionable."""
+            
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.4,
+                max_tokens=1500
+            )
+            
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={
+                    "tokens_used": response["usage"]["total_tokens"],
+                    "model": response["model"]
+                }
+            )
+        except Exception as e:
+            logger.error(f"Diagnoser error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+
+
+class DesignerAgent:
+    """Agent responsible for designing refined, optimized prompts."""
+    
+    def __init__(self):
+        self.name = "Designer"
+        self.role = "Create refined, optimized prompts based on deconstruction and diagnosis"
+    
+    def process(
+        self,
+        prompt: str,
+        deconstruction: str,
+        diagnosis: str,
+        prompt_type: PromptType
+    ) -> AgentOutput:
+        """Design an optimized prompt."""
+        try:
+            system_prompt = f"""As NextEleven AI's Designer specialist, your role is to create refined, optimized prompts that address all identified issues.
+
+Design an improved version of the prompt that:
+1. Eliminates ambiguities
+2. Adds necessary context
+3. Specifies desired output format
+4. Includes best practices for {prompt_type.value} prompts
+5. Maintains the original intent
+6. Improves clarity and actionability
+
+Provide the optimized prompt and explain key improvements."""
+            
+            user_prompt = f"""Original Prompt:
+{prompt}
+
+Deconstruction:
+{deconstruction}
+
+Diagnosis:
+{diagnosis}
+
+Design an optimized version of this prompt. Include both the optimized prompt and a brief explanation of improvements."""
+            
+            # Enable Collections search if configured and enabled (RAG integration)
+            tools = None
+            if settings.enable_collections and is_collections_enabled():
+                tools = enable_collections_for_agent(prompt_type.value, include_collections=True)
+                if tools:
+                    system_prompt += f"""
+                    
+You have access to a knowledge base of high-quality prompt examples via the file_search tool. 
+When designing the optimized prompt, search for similar {prompt_type.value} prompt examples that demonstrate best practices.
+Use the file_search tool to:
+1. Find examples of well-structured prompts in this domain
+2. Identify patterns and techniques used in high-quality prompts
+3. Reference successful prompt structures when creating the optimized version
+
+The tool will search through curated collections of prompt examples. Use it proactively to enhance your design."""
+            
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.6,
+                max_tokens=2000,
+                tools=tools
+            )
+            
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={
+                    "tokens_used": response["usage"]["total_tokens"],
+                    "model": response["model"]
+                }
+            )
+        except Exception as e:
+            logger.error(f"Designer error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+
+
+class EvaluatorAgent:
+    """Agent responsible for evaluating and scoring prompt quality."""
+    
+    def __init__(self):
+        self.name = "Evaluator"
+        self.role = "Evaluate prompt quality and provide scores"
+    
+    def process(
+        self,
+        original_prompt: str,
+        optimized_prompt: str,
+        sample_output: str,
+        prompt_type: PromptType
+    ) -> AgentOutput:
+        """Evaluate prompt quality and generate a score."""
+        try:
+            system_prompt = f"""As NextEleven AI's Evaluator specialist, your role is to assess prompt quality on multiple dimensions.
+
+Evaluate both prompts on:
+1. Clarity and specificity (0-25 points)
+2. Completeness and context (0-25 points)
+3. Actionability and structure (0-25 points)
+4. Likely output quality (0-25 points)
+
+Provide scores for both original and optimized prompts, plus an overall improvement assessment."""
+            
+            user_prompt = f"""Original Prompt:
+{original_prompt}
+
+Optimized Prompt:
+{optimized_prompt}
+
+Sample Output from Optimized Prompt:
+{sample_output}
+
+Evaluate both prompts and provide detailed scores (0-100 total) for each dimension."""
+            
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.3,
+                max_tokens=1500
+            )
+            
+            # Extract score (simple heuristic - could be improved)
+            content = response["content"].lower()
+            score = self._extract_score(content)
+            
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={
+                    "quality_score": score,
+                    "tokens_used": response["usage"]["total_tokens"],
+                    "model": response["model"]
+                }
+            )
+        except Exception as e:
+            logger.error(f"Evaluator error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+    
+    def _extract_score(self, content: str) -> int:
+        """Extract quality score from evaluator output (simple heuristic)."""
+        # Look for patterns like "score: 85" or "85/100"
+        import re
+        patterns = [
+            r'score[:\s]+(\d+)',
+            r'(\d+)/100',
+            r'overall[:\s]+(\d+)',
+            r'total[:\s]+(\d+)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                score = int(match.group(1))
+                return max(0, min(100, score))
+        
+        # Default to 75 if no score found
+        return 75
+
+
+class AgentWorkflow:
+    """
+    Workflow manager for coordinating agent tasks.
+    Supports parallel execution, conditional routing, and error handling.
+    """
+    
+    def __init__(self, agents: Dict[str, Any]):
+        """
+        Initialize workflow with agents.
+        
+        Args:
+            agents: Dictionary of agent instances
+        """
+        self.agents = agents
+        self.max_workers = 3  # Maximum parallel workers
+    
+    def run_parallel(
+        self,
+        tasks: List[Dict[str, Any]],
+        timeout: Optional[float] = None
+    ) -> List[Any]:
+        """
+        Execute multiple agent tasks in parallel.
+        
+        Args:
+            tasks: List of task dictionaries with 'agent' and 'input' keys
+            timeout: Optional timeout in seconds
+        
+        Returns:
+            List of results in order of completion
+        """
+        results = []
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            future_to_task = {}
+            for task in tasks:
+                agent = task.get('agent')
+                input_data = task.get('input', {})
+                func = task.get('func', agent.process)
+                args = task.get('args', [])
+                kwargs = task.get('kwargs', {})
+                
+                future = executor.submit(self._execute_with_retry, func, *args, **kwargs)
+                future_to_task[future] = task
+            
+            # Collect results as they complete
+            for future in as_completed(future_to_task, timeout=timeout):
+                task = future_to_task[future]
+                try:
+                    result = future.result()
+                    results.append({
+                        'task': task.get('name', 'unknown'),
+                        'result': result,
+                        'success': True
+                    })
+                except Exception as e:
+                    logger.error(f"Parallel task {task.get('name', 'unknown')} failed: {str(e)}")
+                    results.append({
+                        'task': task.get('name', 'unknown'),
+                        'result': None,
+                        'success': False,
+                        'error': str(e)
+                    })
+        
+        return results
+    
+    def _execute_with_retry(
+        self,
+        func: Callable,
+        *args,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        **kwargs
+    ) -> Any:
+        """
+        Execute a function with retry logic.
+        
+        Args:
+            func: Function to execute
+            max_retries: Maximum number of retry attempts
+            retry_delay: Delay between retries in seconds
+            *args: Positional arguments for function
+            **kwargs: Keyword arguments for function
+        
+        Returns:
+            Function result
+        
+        Raises:
+            Exception: If all retries fail
+        """
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {wait_time}s: {str(e)}")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"All {max_retries} attempts failed: {str(e)}")
+        
+        raise last_exception
+    
+    def should_use_parallel(self, prompt_type: PromptType, prompt_length: int) -> bool:
+        """
+        Determine if parallel execution should be used.
+        
+        Args:
+            prompt_type: Type of prompt
+            prompt_length: Length of prompt in characters
+        
+        Returns:
+            True if parallel execution should be used
+        """
+        # Use parallel for complex prompt types or long prompts
+        parallel_types = [PromptType.CREATIVE, PromptType.TECHNICAL, PromptType.ANALYTICAL]
+        return prompt_type in parallel_types or prompt_length > 500
+
+
+class OrchestratorAgent:
+    """
+    Orchestrator agent that coordinates the multi-agent workflow.
+    
+    Enhanced with dynamic workflow routing, parallel execution, and retry logic.
+    """
+    
+    def __init__(self):
+        self.name = "Orchestrator"
+        self.deconstructor = DeconstructorAgent()
+        self.diagnoser = DiagnoserAgent()
+        self.designer = DesignerAgent()
+        self.evaluator = EvaluatorAgent()
+        
+        # Initialize workflow manager
+        self.agents_dict = {
+            'deconstructor': self.deconstructor,
+            'diagnoser': self.diagnoser,
+            'designer': self.designer,
+            'evaluator': self.evaluator
+        }
+        self.workflow = AgentWorkflow(self.agents_dict)
+    
+    def handle_identity_query(self, query: str) -> Optional[str]:
+        """
+        Handle identity-related queries specifically.
+        Detects if the query is asking about the AI's identity and responds in-character.
+        
+        Args:
+            query: User query
+        
+        Returns:
+            Response if identity-related, None otherwise
+        """
+        return grok_api.handle_identity_query(query)
+    
+    def optimize_prompt(
+        self,
+        prompt: str,
+        prompt_type: PromptType,
+        use_parallel: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """
+        Orchestrate the full 4-D optimization workflow with dynamic routing.
+        
+        Args:
+            prompt: User's original prompt
+            prompt_type: Type of prompt (creative, technical, etc.)
+            use_parallel: Force parallel execution (None = auto-detect)
+        
+        Returns:
+            Dictionary with all outputs from each agent step
+        """
+        results = {
+            "original_prompt": prompt,
+            "prompt_type": prompt_type.value,
+            "deconstruction": None,
+            "diagnosis": None,
+            "optimized_prompt": None,
+            "sample_output": None,
+            "evaluation": None,
+            "quality_score": None,
+            "errors": [],
+            "workflow_mode": "sequential"  # Will be updated if parallel
+        }
+        
+        try:
+            # Determine if parallel execution should be used
+            if use_parallel is None:
+                use_parallel = self.workflow.should_use_parallel(prompt_type, len(prompt))
+            
+            results["workflow_mode"] = "parallel" if use_parallel else "sequential"
+            logger.info(f"Using {results['workflow_mode']} workflow mode for {prompt_type.value} prompt")
+            
+            # Phase 1: Deconstruct and Diagnose (can be parallel for complex prompts)
+            if use_parallel and prompt_type in [PromptType.CREATIVE, PromptType.TECHNICAL, PromptType.ANALYTICAL]:
+                logger.info("Running deconstruction and diagnosis in parallel...")
+                parallel_results = self.workflow.run_parallel([
+                    {
+                        'name': 'deconstruct',
+                        'agent': self.deconstructor,
+                        'func': self.deconstructor.process,
+                        'args': [prompt, prompt_type],
+                        'kwargs': {}
+                    },
+                    {
+                        'name': 'diagnose_preliminary',
+                        'agent': self.diagnoser,
+                        'func': self._diagnose_preliminary,
+                        'args': [prompt, prompt_type],
+                        'kwargs': {}
+                    }
+                ])
+                
+                # Extract results
+                deconstruct_result = None
+                for pr in parallel_results:
+                    if pr['task'] == 'deconstruct' and pr['success']:
+                        deconstruct_result = pr['result']
+                    elif pr['task'] == 'diagnose_preliminary' and pr['success']:
+                        # Preliminary diagnosis can inform full diagnosis
+                        pass
+                
+                if not deconstruct_result or not deconstruct_result.success:
+                    # Fallback to sequential
+                    logger.warning("Parallel execution failed, falling back to sequential")
+                    deconstruct_result = self.deconstructor.process(prompt, prompt_type)
+                
+                results["deconstruction"] = deconstruct_result.content
+                
+                # Full diagnosis (needs deconstruction)
+                diagnose_result = self.diagnoser.process(
+                    prompt,
+                    deconstruct_result.content,
+                    prompt_type
+                )
+            else:
+                # Sequential execution (default or for simple prompts)
+                logger.info("Running sequential workflow...")
+                
+                # Step 1: Deconstruct
+                deconstruct_result = self.deconstructor.process(prompt, prompt_type)
+                if not deconstruct_result.success:
+                    results["errors"].extend(deconstruct_result.errors)
+                    return results
+                results["deconstruction"] = deconstruct_result.content
+                
+                # Step 2: Diagnose
+                diagnose_result = self.diagnoser.process(
+                    prompt,
+                    deconstruct_result.content,
+                    prompt_type
+                )
+            
+            if not diagnose_result.success:
+                results["errors"].extend(diagnose_result.errors)
+                return results
+            results["diagnosis"] = diagnose_result.content
+            
+            # Phase 2: Design (always sequential as it needs both deconstruction and diagnosis)
+            # This phase uses Collections RAG if enabled
+            logger.info("Starting design phase with Collections RAG support...")
+            design_result = self.designer.process(
+                prompt,
+                deconstruct_result.content,
+                diagnose_result.content,
+                prompt_type
+            )
+            if not design_result.success:
+                results["errors"].extend(design_result.errors)
+                return results
+            results["optimized_prompt"] = design_result.content
+            
+            # Extract just the optimized prompt text (may need refinement)
+            optimized_prompt_text = self._extract_optimized_prompt(design_result.content)
+            
+            # Phase 3: Generate sample output (with retry)
+            logger.info("Generating sample output...")
+            try:
+                sample_output = self.workflow._execute_with_retry(
+                    grok_api.generate_optimized_output,
+                    optimized_prompt_text,
+                    max_retries=2,
+                    retry_delay=1.0
+                )
+                results["sample_output"] = sample_output
+            except Exception as e:
+                logger.warning(f"Could not generate sample output after retries: {str(e)}")
+                results["sample_output"] = "Sample output generation failed."
+                results["errors"].append(f"Sample output error: {str(e)}")
+            
+            # Phase 4: Evaluate (with retry)
+            logger.info("Starting evaluation phase...")
+            try:
+                evaluate_result = self.workflow._execute_with_retry(
+                    self.evaluator.process,
+                    prompt,
+                    optimized_prompt_text,
+                    results["sample_output"],
+                    prompt_type,
+                    max_retries=2,
+                    retry_delay=1.0
+                )
+                if evaluate_result.success:
+                    results["evaluation"] = evaluate_result.content
+                    results["quality_score"] = evaluate_result.metadata.get("quality_score", 75)
+            except Exception as e:
+                logger.warning(f"Evaluation failed after retries: {str(e)}")
+                results["errors"].append(f"Evaluation error: {str(e)}")
+            
+        except Exception as e:
+            logger.error(f"Orchestration error: {str(e)}")
+            results["errors"].append(str(e))
+        
+        return results
+    
+    def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+        """
+        Preliminary diagnosis that can run in parallel with deconstruction.
+        Provides quick insights without full deconstruction context.
+        
+        Args:
+            prompt: Original prompt
+            prompt_type: Type of prompt
+        
+        Returns:
+            Preliminary diagnosis output
+        """
+        try:
+            system_prompt = f"""As NextEleven AI's Diagnoser specialist, provide a quick preliminary analysis of this {prompt_type.value} prompt.
+            
+Identify obvious issues like:
+- Missing critical information
+- Unclear instructions
+- Lack of specificity
+            
+Keep it brief and actionable."""
+            
+            user_prompt = f"Quick preliminary analysis of this prompt:\n\n{prompt}"
+            
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.4,
+                max_tokens=800  # Shorter for preliminary
+            )
+            
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={"preliminary": True, "tokens_used": response["usage"]["total_tokens"]}
+            )
+        except Exception as e:
+            logger.error(f"Preliminary diagnosis error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+    
+    def _extract_optimized_prompt(self, design_output: str) -> str:
+        """Extract the optimized prompt text from designer output."""
+        # Simple extraction - look for markers like "Optimized Prompt:" or code blocks
+        lines = design_output.split('\n')
+        in_prompt = False
+        prompt_lines = []
+        
+        for line in lines:
+            if any(marker in line.lower() for marker in ["optimized prompt", "improved prompt", "refined prompt"]):
+                in_prompt = True
+                continue
+            if in_prompt:
+                if line.strip().startswith('#') or line.strip().startswith('```'):
+                    if prompt_lines:  # If we already started collecting, stop
+                        break
+                    continue
+                if line.strip():
+                    prompt_lines.append(line)
+                    # Stop if we hit explanation section
+                    if any(marker in line.lower() for marker in ["explanation", "improvements", "key changes"]):
+                        break
+        
+        if prompt_lines:
+            return '\n'.join(prompt_lines).strip()
+        
+        # Fallback: return first substantial paragraph
+        paragraphs = [p.strip() for p in design_output.split('\n\n') if len(p.strip()) > 50]
+        return paragraphs[0] if paragraphs else design_output[:500]
