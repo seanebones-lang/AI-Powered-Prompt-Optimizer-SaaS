@@ -81,7 +81,7 @@ if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING"):
         def __init__(self):
             self.xai_api_key = os.getenv("XAI_API_KEY", "test_key")
             self.xai_api_base = os.getenv("XAI_API_BASE", "https://api.x.ai/v1")
-            self.xai_model = os.getenv("XAI_MODEL", "grok-4.1-fast")
+            self.xai_model = os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning")
             self.secret_key = os.getenv("SECRET_KEY", "test_secret")
             self.database_url = os.getenv("DATABASE_URL", "sqlite:///test.db")
             self.free_tier_daily_limit = int(os.getenv("FREE_TIER_DAILY_LIMIT", "5"))
