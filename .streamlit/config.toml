@@ -1,0 +1,33 @@
+# Streamlit Configuration for NextEleven AI Prompt Optimizer
+# Professional dark theme with teal accents
+
+[theme]
+base = "dark"
+primaryColor = "#14B8A6"
+backgroundColor = "#0F172A"
+secondaryBackgroundColor = "#1E293B"
+textColor = "#F8FAFC"
+font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 10
+enableWebsocketCompression = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[runner]
+magicEnabled = true
+fastReruns = true
+
+[logger]
+level = "warning"
+messageFormat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
