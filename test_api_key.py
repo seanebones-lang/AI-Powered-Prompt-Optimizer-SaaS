@@ -6,7 +6,6 @@ Run this to test your API key before deploying.
 import os
 import sys
 import httpx
-import json
 
 def test_xai_api():
     """Test xAI API connectivity and key."""
@@ -37,7 +36,7 @@ def test_xai_api():
         "max_tokens": 50
     }
     
-    print(f"🧪 Testing xAI API...")
+    print("🧪 Testing xAI API...")
     print(f"   Model: {model}")
     print(f"   Endpoint: {url}")
     print(f"   API Key: {api_key[:10]}...{api_key[-4:] if len(api_key) > 14 else '***'}")
@@ -52,9 +51,9 @@ def test_xai_api():
             if response.status_code == 200:
                 data = response.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                print(f"✅ API Key is VALID!")
+                print("✅ API Key is VALID!")
                 print(f"   Response: {content}")
-                print(f"\n🎉 Your API key is working correctly!")
+                print("\n🎉 Your API key is working correctly!")
                 return True
             else:
                 error_text = response.text
@@ -64,7 +63,7 @@ def test_xai_api():
                     error_data = response.json()
                     error_msg = error_data.get("error", {}).get("message", error_text)
                     print(f"   Error: {error_msg}")
-                except:
+                except (ValueError, KeyError):
                     print(f"   Error: {error_text}")
                 
                 if response.status_code == 401:

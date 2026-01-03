@@ -8,10 +8,9 @@ import json
 import logging
 import hashlib
 from typing import Dict, List, Optional, Any
-import httpx
 from config import settings
 from performance import HTTPConnectionPool
-from cache_utils import cached, get_cache
+from cache_utils import get_cache
 from monitoring import get_metrics, track_performance
 
 logger = logging.getLogger(__name__)
@@ -78,12 +77,14 @@ class GrokAPI:
         # Check cache first (for non-tool calls)
         if use_cache and not tools:
             cache = get_cache()
-            cache_key = f"completion:{hashlib.sha256(json.dumps({
+            cache_data = {
                 'prompt': prompt,
                 'system_prompt': system_prompt,
                 'temperature': temperature,
                 'max_tokens': max_tokens
-            }, sort_keys=True).encode()).hexdigest()}"
+            }
+            cache_hash = hashlib.sha256(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
+            cache_key = f"completion:{cache_hash}"
             cached_result = cache.get(cache_key)
             if cached_result:
                 logger.debug("Cache hit for API completion")
@@ -148,7 +149,7 @@ class GrokAPI:
                     try:
                         error_data = response.json()
                         error_msg = error_data.get("error", {}).get("message", error_text)
-                    except:
+                    except (json.JSONDecodeError, ValueError, KeyError):
                         error_msg = error_text
                     raise Exception(f"API error ({response.status_code}): {error_msg}")
                 
@@ -173,7 +174,7 @@ class GrokAPI:
             # Validate choices field
             if "choices" not in data:
                 logger.error(f"API response missing 'choices' field. Keys: {list(data.keys())}")
-                raise Exception(f"API response missing 'choices' field")
+                raise Exception("API response missing 'choices' field")
             
             choices = data.get("choices")
             if choices is None:
@@ -196,7 +197,7 @@ class GrokAPI:
             
             if "message" not in choice:
                 logger.error(f"Choice missing 'message' field. Keys: {list(choice.keys())}")
-                raise Exception(f"Choice missing 'message' field")
+                raise Exception("Choice missing 'message' field")
             
             message = choice["message"]
             if not isinstance(message, dict):
@@ -242,12 +243,14 @@ class GrokAPI:
             # Cache result if caching enabled and no tools used
             if use_cache and not tools:
                 cache = get_cache()
-                cache_key = f"completion:{hashlib.sha256(json.dumps({
+                cache_data = {
                     'prompt': prompt,
                     'system_prompt': system_prompt,
                     'temperature': temperature,
                     'max_tokens': max_tokens
-                }, sort_keys=True).encode()).hexdigest()}"
+                }
+                cache_hash = hashlib.sha256(json.dumps(cache_data, sort_keys=True).encode()).hexdigest()
+                cache_key = f"completion:{cache_hash}"
                 cache.set(cache_key, result, ttl=3600)  # Cache for 1 hour
             
             return result

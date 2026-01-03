@@ -6,10 +6,8 @@ import streamlit as st
 import logging
 import sqlite3
 import time
-from datetime import date, datetime, timedelta
-from typing import Optional
 from agents import OrchestratorAgent, PromptType
-from database import db, User
+from database import db
 from config import settings
 from input_validation import (
     sanitize_and_validate_prompt,
@@ -23,12 +21,10 @@ from batch_optimization import BatchOptimizer
 from ab_testing import ABTesting
 from agent_config import AgentConfigManager
 from voice_prompting import VoicePrompting
-from integrations import SlackIntegration, DiscordIntegration, NotionIntegration
-from monitoring import get_metrics, get_health_checker
-from error_handling import ErrorHandler, retry_with_backoff, RetryStrategy
+from monitoring import get_metrics
+from error_handling import ErrorHandler
 from performance import performance_tracker
 import json
-import time
 
 # Configure logging
 logging.basicConfig(
@@ -829,8 +825,8 @@ def show_batch_page():
                 else:
                     batch_status.text("❌ Failed to create batch job")
                     st.error("❌ Failed to create batch job. Please try again.")
-    
-        # Show batch job results
+
+    # Show batch job results
     if "batch_job_id" in st.session_state:
         st.markdown("---")
         st.subheader("Batch Job Results")
@@ -913,21 +909,21 @@ def show_ab_testing_page():
                 ABTest.created_at.desc()
             ).limit(10).all()
         db_session.close()
-            
-            for test in tests:
-                with st.expander(f"{test.name} - {test.status}"):
-                    results = ABTesting().get_test_results(test.id)
-                    if results:
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.metric("Variant A Score", f"{results['variant_a']['score']:.2f}")
-                            st.metric("Variant A Responses", results['variant_a']['responses'])
-                        with col2:
-                            st.metric("Variant B Score", f"{results['variant_b']['score']:.2f}")
-                            st.metric("Variant B Responses", results['variant_b']['responses'])
-                        
-                        if results.get("winner"):
-                            st.success(f"🏆 Winner: Variant {results['winner'].upper()}")
+
+        for test in tests:
+            with st.expander(f"{test.name} - {test.status}"):
+                results = ABTesting().get_test_results(test.id)
+                if results:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Variant A Score", f"{results['variant_a']['score']:.2f}")
+                        st.metric("Variant A Responses", results['variant_a']['responses'])
+                    with col2:
+                        st.metric("Variant B Score", f"{results['variant_b']['score']:.2f}")
+                        st.metric("Variant B Responses", results['variant_b']['responses'])
+
+                    if results.get("winner"):
+                        st.success(f"🏆 Winner: Variant {results['winner'].upper()}")
 
 
 def show_export_page():
@@ -1009,13 +1005,13 @@ def show_settings_page():
     
     with tab1:
         st.info("Configure Slack integration to optimize prompts via slash commands.")
-        webhook_url = st.text_input("Slack Webhook URL", type="password")
+        st.text_input("Slack Webhook URL", type="password")
         if st.button("Save Slack Settings"):
             st.success("✅ Settings saved!")
     
     with tab2:
         st.info("Configure Discord integration to optimize prompts via bot commands.")
-        webhook_url = st.text_input("Discord Webhook URL", type="password")
+        st.text_input("Discord Webhook URL", type="password")
         if st.button("Save Discord Settings"):
             st.success("✅ Settings saved!")
     

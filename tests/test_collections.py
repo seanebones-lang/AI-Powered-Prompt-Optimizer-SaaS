@@ -1,8 +1,7 @@
 """
 Tests for Grok Collections API integration.
 """
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from collections_utils import (
     get_collections_search_tool,
     get_collections_for_prompt_type,

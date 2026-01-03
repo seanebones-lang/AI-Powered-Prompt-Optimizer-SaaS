@@ -4,9 +4,7 @@ Tests for database models and utilities.
 import pytest
 import os
 import tempfile
-from datetime import date, datetime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from datetime import date
 
 # Set up test environment before importing database module
 test_db_path = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
@@ -17,7 +15,7 @@ os.environ["XAI_API_KEY"] = "test_key"
 os.environ["SECRET_KEY"] = "test_secret"
 os.environ["DATABASE_URL"] = test_db_url
 
-from database import Database, User, OptimizationSession, DailyUsage, Base
+from database import Database, DailyUsage
 import bcrypt
 
 

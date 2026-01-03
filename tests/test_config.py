@@ -12,7 +12,7 @@ def test_config_requires_api_key():
     with patch.dict(os.environ, {}, clear=True):
         # Remove any existing .env file effects
         with pytest.raises((ValidationError, SystemExit)):
-            from config import settings
+            pass
             # This should fail if required fields are missing
 
 

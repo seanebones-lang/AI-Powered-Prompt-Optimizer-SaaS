@@ -232,7 +232,7 @@ class EvaluatorAgent:
     ) -> AgentOutput:
         """Evaluate prompt quality and generate a score."""
         try:
-            system_prompt = f"""As NextEleven AI's Evaluator specialist, your role is to assess prompt quality on multiple dimensions.
+            system_prompt = """As NextEleven AI's Evaluator specialist, your role is to assess prompt quality on multiple dimensions.
 
 Evaluate both prompts on:
 1. Clarity and specificity (0-25 points)
@@ -340,7 +340,7 @@ class AgentWorkflow:
             future_to_task = {}
             for task in tasks:
                 agent = task.get('agent')
-                input_data = task.get('input', {})
+                task.get('input', {})
                 func = task.get('func', agent.process)
                 args = task.get('args', [])
                 kwargs = task.get('kwargs', {})

@@ -2,8 +2,7 @@
 Tests for API utilities.
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from openai import OpenAI
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -34,7 +33,6 @@ def mock_openai_client():
 def test_grok_api_initialization(mock_openai_client):
     """Test GrokAPI initialization."""
     from api_utils import GrokAPI
-    from config import settings
     
     with patch('api_utils.settings') as mock_settings:
         mock_settings.xai_api_key = "test_key"
@@ -73,7 +71,7 @@ def test_generate_completion_with_system_prompt(mock_openai_client):
         mock_settings.xai_model = "grok-4.1-fast"
         
         api = GrokAPI()
-        response = api.generate_completion(
+        api.generate_completion(
             "Test prompt",
             system_prompt="You are a helpful assistant"
         )
@@ -99,7 +97,7 @@ def test_generate_completion_with_tools(mock_openai_client):
         api = GrokAPI()
         tools = [{"type": "function", "function": {"name": "test_tool"}}]
         
-        response = api.generate_completion(
+        api.generate_completion(
             "Test prompt",
             tools=tools
         )

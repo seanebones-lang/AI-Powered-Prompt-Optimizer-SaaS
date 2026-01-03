@@ -4,11 +4,11 @@ FastAPI REST API server for programmatic access to the prompt optimizer.
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Depends, Header, status
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from agents import OrchestratorAgent, PromptType
+from agents import OrchestratorAgent
 from database import db, User, BatchJob
 from batch_optimization import BatchOptimizer
 from ab_testing import ABTesting

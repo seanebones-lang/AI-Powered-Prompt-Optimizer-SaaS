@@ -2,7 +2,7 @@
 Tests for multi-agent system.
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 from agents import (
     OrchestratorAgent,
     DeconstructorAgent,

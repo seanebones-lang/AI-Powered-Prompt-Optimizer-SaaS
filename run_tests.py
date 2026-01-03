@@ -5,9 +5,7 @@ Run this script to test all components of the system.
 """
 import os
 import sys
-import subprocess
 import tempfile
-import shutil
 from pathlib import Path
 
 # Set test environment
@@ -113,7 +111,6 @@ def run_database_tests():
     print("=" * 60)
     
     try:
-        from database import Database, User
         
         # Use test database
         test_db = tempfile.NamedTemporaryFile(delete=False, suffix='.db')

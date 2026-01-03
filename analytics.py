@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy import func, and_
-from database import db, OptimizationSession, DailyUsage, AnalyticsEvent, User
+from database import db, OptimizationSession, DailyUsage
 
 logger = logging.getLogger(__name__)
 
@@ -18,24 +18,24 @@ class Analytics:
     def get_user_analytics(user_id: Optional[int], days: int = 30) -> Dict:
         """
         Get comprehensive analytics for a user.
-        
+
         Args:
             user_id: User ID (None for anonymous)
             days: Number of days to analyze
-            
+
         Returns:
             Dictionary with analytics data
         """
+        db_session = db.get_session()
         try:
-            db_session = db.get_session()
             end_date = date.today()
             start_date = end_date - timedelta(days=days)
-            
+
             # Total optimizations
             total_optimizations = db_session.query(OptimizationSession).filter(
                 OptimizationSession.user_id == user_id if user_id else True
             ).count()
-            
+
             # Optimizations in date range
             optimizations_in_range = db_session.query(OptimizationSession).filter(
                 and_(
@@ -44,7 +44,7 @@ class Analytics:
                     OptimizationSession.created_at <= datetime.combine(end_date, datetime.max.time())
                 )
             ).count()
-            
+
             # Average quality score
             avg_score = db_session.query(
                 func.avg(OptimizationSession.quality_score)
@@ -54,7 +54,7 @@ class Analytics:
                     OptimizationSession.quality_score.isnot(None)
                 )
             ).scalar() or 0
-            
+
             # Quality score distribution
             score_distribution = db_session.query(
                 OptimizationSession.quality_score,
@@ -65,7 +65,7 @@ class Analytics:
                     OptimizationSession.quality_score.isnot(None)
                 )
             ).group_by(OptimizationSession.quality_score).all()
-            
+
             # Prompt type distribution
             type_distribution = db_session.query(
                 OptimizationSession.prompt_type,
@@ -73,7 +73,7 @@ class Analytics:
             ).filter(
                 OptimizationSession.user_id == user_id if user_id else True
             ).group_by(OptimizationSession.prompt_type).all()
-            
+
             # Daily usage trend
             daily_usage = db_session.query(
                 DailyUsage.date,
@@ -85,7 +85,7 @@ class Analytics:
                     DailyUsage.date <= end_date
                 )
             ).order_by(DailyUsage.date).all()
-            
+
             # Average processing time
             avg_processing_time = db_session.query(
                 func.avg(OptimizationSession.processing_time)
@@ -95,7 +95,7 @@ class Analytics:
                     OptimizationSession.processing_time.isnot(None)
                 )
             ).scalar() or 0
-            
+
             # Total tokens used
             total_tokens = db_session.query(
                 func.sum(OptimizationSession.tokens_used)
@@ -105,9 +105,7 @@ class Analytics:
                     OptimizationSession.tokens_used.isnot(None)
                 )
             ).scalar() or 0
-            
-            db_session.close()
-            
+
             return {
                 "total_optimizations": total_optimizations,
                 "optimizations_in_range": optimizations_in_range,
@@ -124,26 +122,27 @@ class Analytics:
             }
         except Exception as e:
             logger.error(f"Error getting user analytics: {str(e)}")
-            db_session.close()
             return {}
+        finally:
+            db_session.close()
     
     @staticmethod
     def get_quality_trends(user_id: Optional[int], days: int = 30) -> List[Dict]:
         """
         Get quality score trends over time.
-        
+
         Args:
             user_id: User ID
             days: Number of days
-            
+
         Returns:
             List of daily average quality scores
         """
+        db_session = db.get_session()
         try:
-            db_session = db.get_session()
             end_date = date.today()
             start_date = end_date - timedelta(days=days)
-            
+
             trends = db_session.query(
                 func.date(OptimizationSession.created_at).label('date'),
                 func.avg(OptimizationSession.quality_score).label('avg_score'),
@@ -156,9 +155,7 @@ class Analytics:
                     OptimizationSession.quality_score.isnot(None)
                 )
             ).group_by(func.date(OptimizationSession.created_at)).order_by('date').all()
-            
-            db_session.close()
-            
+
             return [
                 {
                     "date": str(trend.date),
@@ -169,33 +166,31 @@ class Analytics:
             ]
         except Exception as e:
             logger.error(f"Error getting quality trends: {str(e)}")
-            db_session.close()
             return []
-    
+        finally:
+            db_session.close()
+
     @staticmethod
     def get_top_prompts(user_id: Optional[int], limit: int = 10) -> List[Dict]:
         """
         Get top performing prompts by quality score.
-        
+
         Args:
             user_id: User ID
             limit: Number of prompts to return
-            
+
         Returns:
             List of top prompts
         """
+        db_session = db.get_session()
         try:
-            db_session = db.get_session()
-            
             top_prompts = db_session.query(OptimizationSession).filter(
                 and_(
                     OptimizationSession.user_id == user_id if user_id else True,
                     OptimizationSession.quality_score.isnot(None)
                 )
             ).order_by(OptimizationSession.quality_score.desc()).limit(limit).all()
-            
-            db_session.close()
-            
+
             return [
                 {
                     "id": prompt.id,
@@ -208,8 +203,9 @@ class Analytics:
             ]
         except Exception as e:
             logger.error(f"Error getting top prompts: {str(e)}")
-            db_session.close()
             return []
+        finally:
+            db_session.close()
     
     @staticmethod
     def log_event(user_id: Optional[int], event_type: str, event_data: Optional[Dict] = None):

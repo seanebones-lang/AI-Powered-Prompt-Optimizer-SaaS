@@ -6,7 +6,7 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from agents import OrchestratorAgent, PromptType
+from agents import OrchestratorAgent
 from database import db, BatchJob
 from input_validation import sanitize_and_validate_prompt, validate_prompt_type
 

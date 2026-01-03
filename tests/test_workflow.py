@@ -2,7 +2,7 @@
 Tests for enhanced agent workflow system.
 """
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from agents import (
     OrchestratorAgent,
     AgentWorkflow,
@@ -155,7 +155,7 @@ def test_orchestrator_auto_detect_mode():
     orchestrator = OrchestratorAgent()
     
     # Creative prompt should auto-detect parallel
-    with patch.object(orchestrator, 'optimize_prompt') as mock_optimize:
+    with patch.object(orchestrator, 'optimize_prompt'):
         # This will test the should_use_parallel logic
         workflow = orchestrator.workflow
         assert workflow.should_use_parallel(PromptType.CREATIVE, 100) is True

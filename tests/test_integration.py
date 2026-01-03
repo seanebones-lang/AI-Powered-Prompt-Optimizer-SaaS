@@ -4,7 +4,7 @@ Integration tests for the full system.
 import pytest
 import os
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Set up test environment
 test_db_path = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
