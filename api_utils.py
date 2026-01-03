@@ -162,7 +162,7 @@ class GrokAPI:
             # Handle tool calls if present
             tool_calls = None
             content = message.get("content")
-            usage = data.get("usage", {})
+            usage = data.get("usage") or {}  # Ensure usage is always a dict, never None
             
             if message.get("tool_calls"):
                 logger.info(f"Tool calls detected: {len(message['tool_calls'])} tool(s)")
@@ -231,8 +231,8 @@ class GrokAPI:
                     }
                 except Exception as e:
                     logger.warning(f"Recursive call failed: {str(e)}")
-                    # Use original response
-                    usage = data.get("usage", {})
+                    # Use original response - ensure usage is always a dict
+                    usage = data.get("usage") or {}
             
             # Post-process to enforce persona
             if enforce_persona and content:
