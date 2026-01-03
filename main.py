@@ -249,19 +249,18 @@ st.markdown("""
 
 def init_session_state():
     """Initialize session state variables."""
+    # Beta mode: Skip authentication, auto-authenticate
     if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+        st.session_state.authenticated = True  # Auto-authenticate for beta
     if "user" not in st.session_state:
-        st.session_state.user = None
+        st.session_state.user = None  # No user required for beta
     if "optimization_results" not in st.session_state:
         st.session_state.optimization_results = None
 
 
 def check_auth_required():
     """Check if user needs to authenticate."""
-    if not st.session_state.authenticated:
-        st.warning("⚠️ Please log in or sign up to use the optimizer.")
-        return False
+    # Beta mode: Always return True (skip auth)
     return True
 
 
@@ -628,11 +627,8 @@ def main():
         show_footer()
         st.stop()
     
-    # Route to appropriate page
-    if not st.session_state.authenticated:
-        show_login_page()
-    else:
-        show_main_app()
+    # Beta mode: Always show main app (authentication bypassed)
+    show_main_app()
     
     # Always show footer
     show_footer()
