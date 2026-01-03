@@ -176,7 +176,34 @@ class Database:
     def get_session(self) -> Session:
         """Get a database session."""
         return self.SessionLocal()
-    
+
+    def session_scope(self):
+        """
+        Context manager for database sessions.
+
+        Provides automatic commit on success, rollback on error,
+        and proper session cleanup.
+
+        Usage:
+            with db.session_scope() as session:
+                user = session.query(User).first()
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _session_scope():
+            session = self.SessionLocal()
+            try:
+                yield session
+                session.commit()
+            except SQLAlchemyError:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        return _session_scope()
+
     def create_user(
         self,
         email: str,

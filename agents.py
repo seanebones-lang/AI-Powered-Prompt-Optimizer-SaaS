@@ -35,17 +35,88 @@ class AgentOutput(BaseModel):
     errors: List[str] = Field(default_factory=list, description="Any errors encountered")
 
 
-class DeconstructorAgent:
+class BaseAgent:
+    """
+    Base class for all agents in the 4-D optimization system.
+
+    Provides common functionality for API calls, error handling,
+    and output formatting.
+    """
+
+    name: str = "BaseAgent"
+    role: str = "Base agent"
+    default_temperature: float = 0.5
+    default_max_tokens: int = 1500
+
+    def _call_api(
+        self,
+        user_prompt: str,
+        system_prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[Dict]] = None
+    ) -> AgentOutput:
+        """
+        Common API call method with error handling.
+
+        Args:
+            user_prompt: The user prompt to send
+            system_prompt: The system prompt for context
+            temperature: Optional temperature override
+            max_tokens: Optional max tokens override
+            tools: Optional tools for the API call
+
+        Returns:
+            AgentOutput with success status and content
+        """
+        try:
+            response = grok_api.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=temperature or self.default_temperature,
+                max_tokens=max_tokens or self.default_max_tokens,
+                tools=tools
+            )
+
+            return AgentOutput(
+                success=True,
+                content=response["content"],
+                metadata={
+                    "tokens_used": response["usage"]["total_tokens"],
+                    "model": response["model"],
+                    "agent": self.name
+                }
+            )
+        except Exception as e:
+            logger.error(f"{self.name} error: {str(e)}")
+            return AgentOutput(
+                success=False,
+                content="",
+                errors=[str(e)]
+            )
+
+    def _get_prompt_type_context(self, prompt_type: PromptType) -> str:
+        """Get type-specific context for prompts."""
+        contexts = {
+            PromptType.CREATIVE: "Focus on creativity, emotional resonance, and narrative flow.",
+            PromptType.TECHNICAL: "Focus on precision, accuracy, and technical correctness.",
+            PromptType.ANALYTICAL: "Focus on logical structure, data interpretation, and insights.",
+            PromptType.EDUCATIONAL: "Focus on clarity, comprehension, and learning outcomes.",
+            PromptType.MARKETING: "Focus on persuasion, engagement, and conversion."
+        }
+        return contexts.get(prompt_type, "")
+
+
+class DeconstructorAgent(BaseAgent):
     """Agent responsible for deconstructing vague inputs into structured components."""
-    
-    def __init__(self):
-        self.name = "Deconstructor"
-        self.role = "Break down vague or unstructured prompts into clear, analyzable components"
-    
+
+    name = "Deconstructor"
+    role = "Break down vague or unstructured prompts into clear, analyzable components"
+    default_temperature = 0.5
+
     def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Deconstruct a prompt into components."""
-        try:
-            system_prompt = f"""As NextEleven AI's Deconstructor specialist, your role is to break down vague or unstructured prompts into clear, analyzable components.
+        system_prompt = f"""As NextEleven AI's Deconstructor specialist, your role is to break down vague or unstructured prompts into clear, analyzable components.
 
 Analyze the following {prompt_type.value} prompt and identify:
 1. Core intent/purpose
@@ -54,45 +125,25 @@ Analyze the following {prompt_type.value} prompt and identify:
 4. Missing information or ambiguities
 5. Context requirements
 
+{self._get_prompt_type_context(prompt_type)}
+
 Provide a structured breakdown in a clear, organized format."""
-            
-            user_prompt = f"Deconstruct the following prompt:\n\n{prompt}"
-            
-            response = grok_api.generate_completion(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                temperature=0.5,
-                max_tokens=1500
-            )
-            
-            return AgentOutput(
-                success=True,
-                content=response["content"],
-                metadata={
-                    "tokens_used": response["usage"]["total_tokens"],
-                    "model": response["model"]
-                }
-            )
-        except Exception as e:
-            logger.error(f"Deconstructor error: {str(e)}")
-            return AgentOutput(
-                success=False,
-                content="",
-                errors=[str(e)]
-            )
+
+        user_prompt = f"Deconstruct the following prompt:\n\n{prompt}"
+
+        return self._call_api(user_prompt, system_prompt)
 
 
-class DiagnoserAgent:
+class DiagnoserAgent(BaseAgent):
     """Agent responsible for diagnosing issues in prompts."""
-    
-    def __init__(self):
-        self.name = "Diagnoser"
-        self.role = "Identify weaknesses, ambiguities, and potential issues in prompts"
-    
+
+    name = "Diagnoser"
+    role = "Identify weaknesses, ambiguities, and potential issues in prompts"
+    default_temperature = 0.4
+
     def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
         """Diagnose issues in a prompt."""
-        try:
-            system_prompt = f"""As NextEleven AI's Diagnoser specialist, your role is to identify weaknesses and issues in prompts.
+        system_prompt = f"""As NextEleven AI's Diagnoser specialist, your role is to identify weaknesses and issues in prompts.
 
 Analyze the prompt and its deconstruction to identify:
 1. Ambiguities and unclear instructions
@@ -102,47 +153,27 @@ Analyze the prompt and its deconstruction to identify:
 5. Formatting or structure issues
 6. Best practices violations
 
-For {prompt_type.value} prompts, focus on type-specific concerns."""
-            
-            user_prompt = f"""Original Prompt:
+{self._get_prompt_type_context(prompt_type)}"""
+
+        user_prompt = f"""Original Prompt:
 {prompt}
 
 Deconstruction:
 {deconstruction}
 
 Identify all issues and weaknesses in this prompt. Be specific and actionable."""
-            
-            response = grok_api.generate_completion(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                temperature=0.4,
-                max_tokens=1500
-            )
-            
-            return AgentOutput(
-                success=True,
-                content=response["content"],
-                metadata={
-                    "tokens_used": response["usage"]["total_tokens"],
-                    "model": response["model"]
-                }
-            )
-        except Exception as e:
-            logger.error(f"Diagnoser error: {str(e)}")
-            return AgentOutput(
-                success=False,
-                content="",
-                errors=[str(e)]
-            )
+
+        return self._call_api(user_prompt, system_prompt)
 
 
-class DesignerAgent:
+class DesignerAgent(BaseAgent):
     """Agent responsible for designing refined, optimized prompts."""
-    
-    def __init__(self):
-        self.name = "Designer"
-        self.role = "Create refined, optimized prompts based on deconstruction and diagnosis"
-    
+
+    name = "Designer"
+    role = "Create refined, optimized prompts based on deconstruction and diagnosis"
+    default_temperature = 0.6
+    default_max_tokens = 2000
+
     def process(
         self,
         prompt: str,
@@ -151,8 +182,7 @@ class DesignerAgent:
         prompt_type: PromptType
     ) -> AgentOutput:
         """Design an optimized prompt."""
-        try:
-            system_prompt = f"""As NextEleven AI's Designer specialist, your role is to create refined, optimized prompts that address all identified issues.
+        system_prompt = f"""As NextEleven AI's Designer specialist, your role is to create refined, optimized prompts that address all identified issues.
 
 Design an improved version of the prompt that:
 1. Eliminates ambiguities
@@ -162,9 +192,11 @@ Design an improved version of the prompt that:
 5. Maintains the original intent
 6. Improves clarity and actionability
 
+{self._get_prompt_type_context(prompt_type)}
+
 Provide the optimized prompt and explain key improvements."""
-            
-            user_prompt = f"""Original Prompt:
+
+        user_prompt = f"""Original Prompt:
 {prompt}
 
 Deconstruction:
@@ -174,15 +206,15 @@ Diagnosis:
 {diagnosis}
 
 Design an optimized version of this prompt. Include both the optimized prompt and a brief explanation of improvements."""
-            
-            # Enable Collections search if configured and enabled (RAG integration)
-            tools = None
-            if settings.enable_collections and is_collections_enabled():
-                tools = enable_collections_for_agent(prompt_type.value, include_collections=True)
-                if tools:
-                    system_prompt += f"""
-                    
-You have access to a knowledge base of high-quality prompt examples via the file_search tool. 
+
+        # Enable Collections search if configured and enabled (RAG integration)
+        tools = None
+        if settings.enable_collections and is_collections_enabled():
+            tools = enable_collections_for_agent(prompt_type.value, include_collections=True)
+            if tools:
+                system_prompt += f"""
+
+You have access to a knowledge base of high-quality prompt examples via the file_search tool.
 When designing the optimized prompt, search for similar {prompt_type.value} prompt examples that demonstrate best practices.
 Use the file_search tool to:
 1. Find examples of well-structured prompts in this domain
@@ -190,39 +222,17 @@ Use the file_search tool to:
 3. Reference successful prompt structures when creating the optimized version
 
 The tool will search through curated collections of prompt examples. Use it proactively to enhance your design."""
-            
-            response = grok_api.generate_completion(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                temperature=0.6,
-                max_tokens=2000,
-                tools=tools
-            )
-            
-            return AgentOutput(
-                success=True,
-                content=response["content"],
-                metadata={
-                    "tokens_used": response["usage"]["total_tokens"],
-                    "model": response["model"]
-                }
-            )
-        except Exception as e:
-            logger.error(f"Designer error: {str(e)}")
-            return AgentOutput(
-                success=False,
-                content="",
-                errors=[str(e)]
-            )
+
+        return self._call_api(user_prompt, system_prompt, tools=tools)
 
 
-class EvaluatorAgent:
+class EvaluatorAgent(BaseAgent):
     """Agent responsible for evaluating and scoring prompt quality."""
-    
-    def __init__(self):
-        self.name = "Evaluator"
-        self.role = "Evaluate prompt quality and provide scores"
-    
+
+    name = "Evaluator"
+    role = "Evaluate prompt quality and provide scores"
+    default_temperature = 0.3
+
     def process(
         self,
         original_prompt: str,
@@ -231,8 +241,7 @@ class EvaluatorAgent:
         prompt_type: PromptType
     ) -> AgentOutput:
         """Evaluate prompt quality and generate a score."""
-        try:
-            system_prompt = """As NextEleven AI's Evaluator specialist, your role is to assess prompt quality on multiple dimensions.
+        system_prompt = """As NextEleven AI's Evaluator specialist, your role is to assess prompt quality on multiple dimensions.
 
 Evaluate both prompts on:
 1. Clarity and specificity (0-25 points)
@@ -241,8 +250,8 @@ Evaluate both prompts on:
 4. Likely output quality (0-25 points)
 
 Provide scores for both original and optimized prompts, plus an overall improvement assessment."""
-            
-            user_prompt = f"""Original Prompt:
+
+        user_prompt = f"""Original Prompt:
 {original_prompt}
 
 Optimized Prompt:
@@ -252,38 +261,18 @@ Sample Output from Optimized Prompt:
 {sample_output}
 
 Evaluate both prompts and provide detailed scores (0-100 total) for each dimension."""
-            
-            response = grok_api.generate_completion(
-                prompt=user_prompt,
-                system_prompt=system_prompt,
-                temperature=0.3,
-                max_tokens=1500
-            )
-            
-            # Extract score (simple heuristic - could be improved)
-            content = response["content"].lower()
-            score = self._extract_score(content)
-            
-            return AgentOutput(
-                success=True,
-                content=response["content"],
-                metadata={
-                    "quality_score": score,
-                    "tokens_used": response["usage"]["total_tokens"],
-                    "model": response["model"]
-                }
-            )
-        except Exception as e:
-            logger.error(f"Evaluator error: {str(e)}")
-            return AgentOutput(
-                success=False,
-                content="",
-                errors=[str(e)]
-            )
-    
+
+        result = self._call_api(user_prompt, system_prompt)
+
+        # Extract score and add to metadata
+        if result.success:
+            score = self._extract_score(result.content.lower())
+            result.metadata["quality_score"] = score
+
+        return result
+
     def _extract_score(self, content: str) -> int:
         """Extract quality score from evaluator output (simple heuristic)."""
-        # Look for patterns like "score: 85" or "85/100"
         import re
         patterns = [
             r'score[:\s]+(\d+)',
@@ -291,13 +280,13 @@ Evaluate both prompts and provide detailed scores (0-100 total) for each dimensi
             r'overall[:\s]+(\d+)',
             r'total[:\s]+(\d+)'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, content)
             if match:
                 score = int(match.group(1))
                 return max(0, min(100, score))
-        
+
         # Default to 75 if no score found
         return 75
 
