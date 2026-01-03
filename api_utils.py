@@ -77,6 +77,9 @@ class GrokAPI:
                 full_system_prompt = system_prompt or ""
             
             # Create chat with system message
+            # Note: xAI SDK's chat.create() doesn't accept temperature/max_tokens
+            # These parameters are passed to chat.sample() but xAI SDK 1.5.0 doesn't support them
+            # We'll create the chat and call sample() without parameters
             if full_system_prompt:
                 chat = self.client.chat.create(
                     model=self.model,
@@ -91,11 +94,9 @@ class GrokAPI:
             # Add user message
             chat.append(user(prompt))
             
-            # Generate response
-            response = chat.sample(
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            # Generate response - xAI SDK 1.5.0's sample() doesn't accept temperature/max_tokens
+            # These are model defaults or set at model level
+            response = chat.sample()
             
             # Check if response is None
             if response is None:
