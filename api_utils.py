@@ -42,13 +42,7 @@ class GrokAPI:
         self.base_url = settings.xai_api_base.rstrip('/')
         self.model = settings.xai_model
         self.timeout = timeout
-        self.client = httpx.Client(
-            timeout=httpx.Timeout(timeout, connect=10.0),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        )
+        # Don't create persistent client - create new one per request to avoid connection issues
     
     def generate_completion(
         self,
@@ -104,14 +98,33 @@ class GrokAPI:
                 payload["tools"] = tools
                 payload["tool_choice"] = tool_choice or "auto"
             
-            # Make API request
+            # Make API request - create client per request for better compatibility
             url = f"{self.base_url}/chat/completions"
-            response = self.client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
+                response = client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+            
+            # Validate response structure
+            if not data or not isinstance(data, dict):
+                raise Exception(f"Invalid API response format: {data}")
+            
+            if "choices" not in data or not data["choices"]:
+                error_msg = data.get("error", {}).get("message", "No choices in response")
+                raise Exception(f"API returned no choices: {error_msg}")
+            
+            if not isinstance(data["choices"], list) or len(data["choices"]) == 0:
+                raise Exception("API returned empty choices list")
             
             # Handle response
             choice = data["choices"][0]
+            if not choice or "message" not in choice:
+                raise Exception(f"Invalid choice format: {choice}")
+            
             message = choice["message"]
             
             # Handle tool calls if present
@@ -155,9 +168,10 @@ class GrokAPI:
                         recursive_payload["tools"] = tools
                         recursive_payload["tool_choice"] = tool_choice or "auto"
                     
-                    recursive_response = self.client.post(url, json=recursive_payload)
-                    recursive_response.raise_for_status()
-                    recursive_data = recursive_response.json()
+                    with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=10.0)) as recursive_client:
+                        recursive_response = recursive_client.post(url, json=recursive_payload, headers=headers)
+                        recursive_response.raise_for_status()
+                        recursive_data = recursive_response.json()
                     
                     content = recursive_data["choices"][0]["message"].get("content")
                     recursive_usage = recursive_data.get("usage", {})
@@ -314,13 +328,6 @@ class GrokAPI:
         
         return None
     
-    def __del__(self):
-        """Clean up httpx client."""
-        if hasattr(self, 'client'):
-            try:
-                self.client.close()
-            except:
-                pass
 
 
 # Global API instance
