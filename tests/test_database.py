@@ -15,8 +15,8 @@ os.environ["XAI_API_KEY"] = "test_key"
 os.environ["SECRET_KEY"] = "test_secret"
 os.environ["DATABASE_URL"] = test_db_url
 
-from database import Database, DailyUsage
-import bcrypt
+from database import Database, DailyUsage  # noqa: E402
+import bcrypt  # noqa: E402
 
 
 @pytest.fixture

@@ -12,8 +12,6 @@ def test_config_requires_api_key():
     # Note: conftest.py sets the env var before import, so we test the validation logic exists
     from config import Settings
 
-    # The Settings class should have xai_api_key as a required attribute
-    settings_instance = Settings.__dict__
     # Just verify the class exists and has the expected structure
     assert hasattr(Settings, '__init__')
 
