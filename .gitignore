@@ -41,8 +41,8 @@ prompt_optimizer.db
 *.swo
 *~
 
-# Streamlit
-.streamlit/
+# Streamlit secrets (config.toml should be committed)
+.streamlit/secrets.toml
 
 # OS
 .DS_Store

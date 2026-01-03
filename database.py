@@ -5,7 +5,7 @@ Handles user authentication, session history, and usage tracking.
 import logging
 from datetime import datetime, date
 from typing import Optional, List, Dict
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, Float, JSON, func
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, Float, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from sqlalchemy.exc import SQLAlchemyError
@@ -176,7 +176,34 @@ class Database:
     def get_session(self) -> Session:
         """Get a database session."""
         return self.SessionLocal()
-    
+
+    def session_scope(self):
+        """
+        Context manager for database sessions.
+
+        Provides automatic commit on success, rollback on error,
+        and proper session cleanup.
+
+        Usage:
+            with db.session_scope() as session:
+                user = session.query(User).first()
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _session_scope():
+            session = self.SessionLocal()
+            try:
+                yield session
+                session.commit()
+            except SQLAlchemyError:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        return _session_scope()
+
     def create_user(
         self,
         email: str,
@@ -371,7 +398,7 @@ class Database:
             if is_default:
                 db.query(AgentConfig).filter(
                     AgentConfig.user_id == user_id,
-                    AgentConfig.is_default == True
+                    AgentConfig.is_default
                 ).update({"is_default": False})
             
             config = AgentConfig(
@@ -408,7 +435,7 @@ class Database:
         try:
             return db.query(AgentConfig).filter(
                 AgentConfig.user_id == user_id,
-                AgentConfig.is_default == True
+                AgentConfig.is_default
             ).first()
         finally:
             db.close()

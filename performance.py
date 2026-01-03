@@ -4,7 +4,7 @@ Includes connection pooling, request batching, and performance tracking.
 """
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Dict
 from functools import wraps
 import httpx
 from contextlib import contextmanager

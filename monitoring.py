@@ -5,8 +5,9 @@ Tracks metrics, performance, and system health.
 import logging
 import time
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict, deque
+from sqlalchemy import text
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ class HealthChecker:
         """Check database connectivity."""
         try:
             db_session = db.get_session()
-            db_session.execute("SELECT 1")
+            db_session.execute(text("SELECT 1"))
             db_session.close()
             return True
         except Exception as e:

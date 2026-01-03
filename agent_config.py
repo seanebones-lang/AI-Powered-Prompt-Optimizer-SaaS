@@ -5,8 +5,8 @@ Allows users to customize agent behavior, temperature, and other parameters.
 import logging
 import json
 from typing import Dict, Any, Optional
-from database import db, AgentConfig, User
-from agents import OrchestratorAgent, PromptType
+from database import db, AgentConfig
+from agents import OrchestratorAgent
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,6 @@
 """
 Tests for evaluation utilities.
 """
-import pytest
 from evaluation import (
     calculate_perplexity_score,
     extract_quality_indicators,

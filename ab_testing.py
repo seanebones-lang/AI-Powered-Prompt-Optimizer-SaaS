@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from agents import OrchestratorAgent, PromptType
 from database import db, ABTest
-from input_validation import sanitize_and_validate_prompt, validate_prompt_type
+from input_validation import sanitize_and_validate_prompt
 
 logger = logging.getLogger(__name__)
 

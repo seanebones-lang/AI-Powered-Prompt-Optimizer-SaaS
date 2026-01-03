@@ -3,7 +3,6 @@ Integration modules for Slack, Discord, and Notion.
 Allows users to optimize prompts directly from these platforms.
 """
 import logging
-import json
 from typing import Dict, Any, Optional
 import httpx
 from agents import OrchestratorAgent, PromptType
