@@ -521,54 +521,54 @@ def show_optimize_page():
                 
                 progress_bar.progress(90)
                 status_text.text("💾 Saving results...")
-                    
-                    # Beta mode: Don't track usage limits
-                    # user_id = st.session_state.user.id if st.session_state.user else None
-                    # db.increment_usage(user_id)
-                    
-                    # Beta mode: Optionally save session (for analytics, not required)
-                    # Save session (use sanitized prompt)
-                    optimized_prompt_text = results.get("optimized_prompt", "")[:1000]  # Limit length
-                    sample_output = results.get("sample_output", "")[:2000]
-                    quality_score = results.get("quality_score")
-                    
-                    # Optional: Save for analytics (user_id can be None in beta)
-                    user_id = st.session_state.user.id if st.session_state.user else None
-                    try:
-                        db.save_session(
-                            user_id=user_id,
-                            original_prompt=sanitized_prompt,  # Store sanitized version
-                            prompt_type=prompt_type,
-                            optimized_prompt=optimized_prompt_text,
-                            sample_output=sample_output,
-                            quality_score=quality_score
-                        )
-                    except Exception as e:
-                        logger.debug(f"Optional session save failed (beta mode): {str(e)}")
-                    
-                    st.session_state.optimization_results = results
-                    
-                    # Store in recent optimizations (beta mode)
-                    if "recent_optimizations" not in st.session_state:
-                        st.session_state.recent_optimizations = []
-                    st.session_state.recent_optimizations.append({
-                        "original_prompt": sanitized_prompt,
-                        "optimized_prompt": results.get("optimized_prompt", ""),
-                        "quality_score": quality_score,
-                        "prompt_type": prompt_type
-                    })
-                    
-                    progress_bar.progress(100)
-                    status_text.text("✅ Complete!")
-                    st.success("✅ Optimization complete!")
-                    
-                    # Track metrics
-                    metrics = get_metrics()
-                    metrics.increment("optimizations.completed")
-                    if quality_score:
-                        metrics.gauge("optimizations.avg_quality_score", quality_score)
-                    
-                    st.rerun()
+                
+                # Beta mode: Don't track usage limits
+                # user_id = st.session_state.user.id if st.session_state.user else None
+                # db.increment_usage(user_id)
+                
+                # Beta mode: Optionally save session (for analytics, not required)
+                # Save session (use sanitized prompt)
+                optimized_prompt_text = results.get("optimized_prompt", "")[:1000]  # Limit length
+                sample_output = results.get("sample_output", "")[:2000]
+                quality_score = results.get("quality_score")
+                
+                # Optional: Save for analytics (user_id can be None in beta)
+                user_id = st.session_state.user.id if st.session_state.user else None
+                try:
+                    db.save_session(
+                        user_id=user_id,
+                        original_prompt=sanitized_prompt,  # Store sanitized version
+                        prompt_type=prompt_type,
+                        optimized_prompt=optimized_prompt_text,
+                        sample_output=sample_output,
+                        quality_score=quality_score
+                    )
+                except Exception as e:
+                    logger.debug(f"Optional session save failed (beta mode): {str(e)}")
+                
+                st.session_state.optimization_results = results
+                
+                # Store in recent optimizations (beta mode)
+                if "recent_optimizations" not in st.session_state:
+                    st.session_state.recent_optimizations = []
+                st.session_state.recent_optimizations.append({
+                    "original_prompt": sanitized_prompt,
+                    "optimized_prompt": results.get("optimized_prompt", ""),
+                    "quality_score": quality_score,
+                    "prompt_type": prompt_type
+                })
+                
+                progress_bar.progress(100)
+                status_text.text("✅ Complete!")
+                st.success("✅ Optimization complete!")
+                
+                # Track metrics
+                metrics = get_metrics()
+                metrics.increment("optimizations.completed")
+                if quality_score:
+                    metrics.gauge("optimizations.avg_quality_score", quality_score)
+                
+                st.rerun()
                     
                 except Exception as e:
                     logger.error(f"Optimization error: {str(e)}")
