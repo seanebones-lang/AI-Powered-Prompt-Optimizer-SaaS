@@ -7,8 +7,11 @@ Enhanced with dynamic workflow orchestration, parallel execution, and retry logi
 """
 import logging
 import time
-from typing import Dict, List, Optional, Any, Callable
+import re
+import json
+from typing import Dict, List, Optional, Any, Callable, TypedDict
 from enum import Enum
+from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pydantic import BaseModel, Field
 from api_utils import grok_api
@@ -16,6 +19,78 @@ from collections_utils import enable_collections_for_agent, is_collections_enabl
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AgentMetrics:
+    """Metrics for agent execution tracking."""
+    agent_name: str
+    execution_time_ms: float
+    tokens_used: int
+    success: bool
+    error: Optional[str] = None
+
+
+class StructuredOutputParser:
+    """
+    Parse and validate structured outputs from agent responses.
+
+    Handles JSON extraction, validation, and fallback parsing.
+    """
+
+    @staticmethod
+    def extract_json(content: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract JSON from agent response content.
+
+        Handles both raw JSON and markdown code blocks.
+        """
+        if not content:
+            return None
+
+        # Try direct JSON parsing
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting from markdown code block
+        json_patterns = [
+            r'```json\s*\n?(.*?)\n?```',
+            r'```\s*\n?(.*?)\n?```',
+            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        ]
+
+        for pattern in json_patterns:
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1) if '```' in pattern else match.group(0))
+                except json.JSONDecodeError:
+                    continue
+
+        return None
+
+    @staticmethod
+    def extract_score(content: str) -> int:
+        """Extract quality score from content using multiple patterns."""
+        if not content:
+            return 75
+
+        content_lower = content.lower()
+        patterns = [
+            r'(?:total|overall|final|quality)\s*(?:score)?[:\s]+(\d+)',
+            r'(\d+)\s*/\s*100',
+            r'score[:\s]+(\d+)',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, content_lower)
+            if match:
+                score = int(match.group(1))
+                return max(0, min(100, score))
+
+        return 75  # Default score
 
 
 class PromptType(str, Enum):
@@ -57,7 +132,7 @@ class BaseAgent:
         tools: Optional[List[Dict]] = None
     ) -> AgentOutput:
         """
-        Common API call method with error handling.
+        Common API call method with error handling and metrics.
 
         Args:
             user_prompt: The user prompt to send
@@ -67,8 +142,9 @@ class BaseAgent:
             tools: Optional tools for the API call
 
         Returns:
-            AgentOutput with success status and content
+            AgentOutput with success status, content, and metrics
         """
+        start_time = time.time()
         try:
             response = grok_api.generate_completion(
                 prompt=user_prompt,
@@ -78,21 +154,30 @@ class BaseAgent:
                 tools=tools
             )
 
+            execution_time_ms = (time.time() - start_time) * 1000
+            tokens_used = response["usage"]["total_tokens"]
+
             return AgentOutput(
                 success=True,
                 content=response["content"],
                 metadata={
-                    "tokens_used": response["usage"]["total_tokens"],
+                    "tokens_used": tokens_used,
                     "model": response["model"],
-                    "agent": self.name
+                    "agent": self.name,
+                    "execution_time_ms": round(execution_time_ms, 2)
                 }
             )
         except Exception as e:
+            execution_time_ms = (time.time() - start_time) * 1000
             logger.error(f"{self.name} error: {str(e)}")
             return AgentOutput(
                 success=False,
                 content="",
-                errors=[str(e)]
+                errors=[str(e)],
+                metadata={
+                    "agent": self.name,
+                    "execution_time_ms": round(execution_time_ms, 2)
+                }
             )
 
     def _get_prompt_type_context(self, prompt_type: PromptType) -> str:
