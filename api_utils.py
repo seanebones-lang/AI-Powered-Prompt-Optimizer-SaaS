@@ -97,23 +97,35 @@ class GrokAPI:
                 max_tokens=max_tokens
             )
             
-            # Extract content
-            content = response.content if hasattr(response, 'content') else str(response)
+            # Check if response is None
+            if response is None:
+                raise Exception("xAI API returned None response")
             
-            # Extract usage information if available
-            usage_info = {}
-            if hasattr(response, 'usage'):
-                usage_info = {
-                    "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0),
-                    "completion_tokens": getattr(response.usage, 'completion_tokens', 0),
-                    "total_tokens": getattr(response.usage, 'total_tokens', 0)
-                }
+            # Extract content - xAI SDK response object has .content attribute
+            content = None
+            if hasattr(response, 'content'):
+                content = response.content
+            elif hasattr(response, 'text'):
+                content = response.text
             else:
-                # Default usage if not available
+                # Fallback: try to convert to string
+                content = str(response) if response else ""
+            
+            if content is None:
+                content = ""
+            
+            # Extract usage information - xAI SDK response.usage is an object with token counts
+            usage_info = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0
+            }
+            
+            if hasattr(response, 'usage') and response.usage is not None:
                 usage_info = {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0
+                    "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(response.usage, 'completion_tokens', 0) or 0,
+                    "total_tokens": getattr(response.usage, 'total_tokens', 0) or 0
                 }
             
             # Post-process to enforce persona (sanitize any accidental mentions)
