@@ -40,16 +40,18 @@ class GrokAPI:
         
         Args:
             timeout: Request timeout in seconds (default: 60.0)
+            Note: Timeout not set in client init due to version compatibility.
+            Timeouts are handled at the request level if needed.
         """
-        # Use float timeout - OpenAI client accepts float or httpx.Timeout
-        # Using float to avoid version compatibility issues
+        # Don't set timeout in client init due to OpenAI/httpx version compatibility issue
+        # The OpenAI client will use its default timeout (typically 600 seconds)
+        # Timeout handling can be added per-request if needed
         self.client = OpenAI(
             api_key=settings.xai_api_key,
-            base_url=settings.xai_api_base,
-            timeout=timeout
+            base_url=settings.xai_api_base
         )
         self.model = settings.xai_model
-        self.timeout = timeout
+        self.timeout = timeout  # Store for reference, even though not used in client init
     
     def generate_completion(
         self,
