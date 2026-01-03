@@ -13,11 +13,23 @@ uvicorn[standard]>=0.24.0
 reportlab>=4.0.0  # For PDF export
 python-multipart>=0.0.6  # For FastAPI file uploads
 
+# Payments
+stripe>=7.0.0  # Stripe payment processing
+
 # Analytics and Visualization
 plotly>=5.17.0  # For interactive charts in analytics dashboard
 pandas>=2.1.0  # For data analysis
+numpy>=1.26.0  # For vector operations in Agentic RAG
+
+# Observability and Monitoring
+python-json-logger>=2.0.0  # Structured JSON logging
+sentry-sdk>=1.40.0  # Error tracking and monitoring
+
+# Caching (optional, for production)
+redis>=5.0.0  # Redis client for distributed caching
 
 # Testing
 pytest==8.3.3
 pytest-cov==5.0.0
 pytest-mock==3.14.0
+ruff>=0.1.0  # Linting

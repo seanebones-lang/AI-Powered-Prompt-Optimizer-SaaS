@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prompt-optimizer
+    ports:
+      - "8501:8501"
+    environment:
+      - XAI_API_KEY=${XAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=sqlite:///data/prompt_optimizer.db
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - ENABLE_COLLECTIONS=${ENABLE_COLLECTIONS:-false}
+    volumes:
+      - app-data:/app/data
+      - ./.streamlit:/app/.streamlit:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - prompt-optimizer-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prompt-optimizer-api
+    command: ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      - XAI_API_KEY=${XAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=sqlite:///data/prompt_optimizer.db
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+    volumes:
+      - app-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - prompt-optimizer-network
+    depends_on:
+      - app
+
+  # Optional: Redis for caching (production)
+  redis:
+    image: redis:7-alpine
+    container_name: prompt-optimizer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - prompt-optimizer-network
+    profiles:
+      - production
+
+  # Optional: PostgreSQL (production)
+  postgres:
+    image: postgres:16-alpine
+    container_name: prompt-optimizer-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-prompt_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-prompt_password}
+      - POSTGRES_DB=${POSTGRES_DB:-prompt_optimizer}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-prompt_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prompt-optimizer-network
+    profiles:
+      - production
+
+volumes:
+  app-data:
+  redis-data:
+  postgres-data:
+
+networks:
+  prompt-optimizer-network:
+    driver: bridge

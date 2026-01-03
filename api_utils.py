@@ -12,6 +12,7 @@ from config import settings
 from performance import HTTPConnectionPool, track_performance
 from cache_utils import get_cache
 from monitoring import get_metrics
+from observability import get_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +96,12 @@ class GrokAPI:
         metrics = get_metrics()
         metrics.increment("api_requests")
         
+        # Get LLM call tracker for observability
+        tracker = get_tracker()
+
         try:
             messages = []
-            
+
             # Build system prompt with persona enforcement
             full_system_prompt = ""
             if enforce_persona:
@@ -106,10 +110,10 @@ class GrokAPI:
                     full_system_prompt += f"\n\n{system_prompt}"
             else:
                 full_system_prompt = system_prompt or ""
-            
+
             if full_system_prompt:
                 messages.append({"role": "system", "content": full_system_prompt})
-            
+
             messages.append({"role": "user", "content": prompt})
             
             payload = {
@@ -132,16 +136,18 @@ class GrokAPI:
             }
             
             logger.debug(f"Making API request to {url} with model {self.model}")
-            
+
             # Use connection pooling for better performance
+            # Track LLM call for observability (cost, latency, tokens)
             metrics = get_metrics()
+            llm_call_context = None
             with metrics.time_block("api_request"):
                 client = HTTPConnectionPool.get_client(self.base_url, self.timeout)
                 response = client.post(url, json=payload, headers=headers)
-                
+
                 # Log response status
                 logger.debug(f"API response status: {response.status_code}")
-                
+
                 # Handle non-200 status codes
                 if response.status_code != 200:
                     error_text = response.text
@@ -152,7 +158,7 @@ class GrokAPI:
                     except (json.JSONDecodeError, ValueError, KeyError):
                         error_msg = error_text
                     raise Exception(f"API error ({response.status_code}): {error_msg}")
-                
+
                 # Parse JSON response
                 try:
                     data = response.json()
@@ -212,12 +218,16 @@ class GrokAPI:
             elif not isinstance(usage_data, dict):
                 usage_data = {}
             
+            # Track LLM call for observability (cost, latency, tokens)
+            with tracker.track_call(self.model) as llm_call:
+                llm_call.set_tokens(usage_data)
+
             # Handle tool calls if present
             tool_calls = None
             if message.get("tool_calls"):
                 logger.info(f"Tool calls detected: {len(message['tool_calls'])} tool(s)")
                 tool_calls = message["tool_calls"]
-                
+
                 # For now, just log tool calls - full recursive handling can be added later
                 logger.info("Tool calls detected but recursive handling simplified for stability")
             
