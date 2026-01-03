@@ -110,146 +110,263 @@ def check_ip_rate_limit(ip: str, max_requests: int = 5, window_hours: int = 24) 
         return False
 
 # --- Force Dark Mode with Teal/White Theme via CSS ---
+# Professional styling with glassmorphism effects (January 2026)
 st.markdown("""
     <style>
-    /* Base dark mode */
-    [data-testid="stAppViewContainer"] {
-        background-color: #121212 !important;
-        color: #FFFFFF !important;
+    /* Import Inter font for modern look */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Global font */
+    .stApp, .stMarkdown, p, label, span {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
-    
+
+    /* Base dark mode with slate colors */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%) !important;
+        color: #F8FAFC !important;
+    }
+
     /* Main container background */
     .main .block-container {
-        background-color: #121212 !important;
+        background-color: transparent !important;
         padding-top: 2rem;
-        padding-bottom: 5rem; /* Space for footer */
+        padding-bottom: 5rem;
     }
-    
+
     /* Text and headers */
     h1, h2, h3, h4, h5, h6, p, label, .stMarkdown, .stText, div[data-baseweb="select"] {
-        color: #FFFFFF !important;
+        color: #F8FAFC !important;
     }
-    
-    /* Main header styling */
+
+    /* Main header styling with gradient */
     .main-header {
         font-size: 2.5rem;
-        font-weight: bold;
-        color: #00BFA5 !important;
+        font-weight: 700;
+        background: linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         margin-bottom: 1rem;
     }
-    
-    /* Teal accents for buttons */
+
+    /* Teal accents for buttons with gradient and hover effect */
     .stButton > button {
-        background-color: #00BFA5 !important;
-        color: #121212 !important;
-        border: 1px solid #00BFA5 !important;
-        font-weight: 600;
+        background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%) !important;
+        color: #0F172A !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 0.75rem 1.5rem !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 4px 6px -1px rgba(20, 184, 166, 0.25) !important;
     }
     .stButton > button:hover {
-        background-color: #008F7A !important;
-        border-color: #008F7A !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 15px -3px rgba(20, 184, 166, 0.3) !important;
     }
-    
-    /* Select boxes */
+
+    /* Glassmorphism cards for containers */
+    .glass-card {
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(148, 163, 184, 0.1) !important;
+        padding: 1.5rem !important;
+    }
+
+    /* Select boxes with modern styling */
     .stSelectbox > div > div {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border-radius: 8px !important;
     }
     div[data-baseweb="select"] > div {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
     }
-    
-    /* Input fields */
+
+    /* Input fields with focus effects */
     .stTextInput > div > div > input {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
-        border: 1px solid #00BFA5 !important;
+        background-color: #0F172A !important;
+        color: #F8FAFC !important;
+        border: 2px solid #334155 !important;
+        border-radius: 8px !important;
+        transition: border-color 0.2s ease !important;
     }
-    
+    .stTextInput > div > div > input:focus {
+        border-color: #14B8A6 !important;
+        box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15) !important;
+    }
+
     .stTextArea > div > div > textarea {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
-        border: 1px solid #00BFA5 !important;
+        background-color: #0F172A !important;
+        color: #F8FAFC !important;
+        border: 2px solid #334155 !important;
+        border-radius: 8px !important;
+        transition: border-color 0.2s ease !important;
     }
-    
-    /* Sidebar */
+    .stTextArea > div > div > textarea:focus {
+        border-color: #14B8A6 !important;
+        box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15) !important;
+    }
+
+    /* Sidebar with gradient */
     [data-testid="stSidebar"] {
-        background-color: #1E1E1E !important;
+        background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%) !important;
     }
     [data-testid="stSidebar"] .stMarkdown {
-        color: #FFFFFF !important;
+        color: #F8FAFC !important;
     }
-    
-    /* Tabs */
+
+    /* Tabs with modern styling */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #1E1E1E !important;
+        background-color: rgba(30, 41, 59, 0.5) !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #FFFFFF !important;
+        color: #94A3B8 !important;
+        border-radius: 8px !important;
     }
-    
+    .stTabs [aria-selected="true"] {
+        background-color: #14B8A6 !important;
+        color: #0F172A !important;
+    }
+
     /* Code blocks */
     .stCodeBlock {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
+        background-color: #0F172A !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
     }
-    
-    /* Info boxes */
+
+    /* Info boxes with glassmorphism */
     .stAlert {
-        background-color: #1E1E1E !important;
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(10px) !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(148, 163, 184, 0.1) !important;
     }
-    
-    /* Score badges */
+
+    /* Score badges with gradient backgrounds */
     .score-badge {
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-        font-weight: bold;
+        padding: 0.75rem 1.25rem;
+        border-radius: 12px;
+        font-weight: 600;
         font-size: 1.2rem;
         text-align: center;
         margin: 1rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
     .score-high {
-        background-color: #00BFA5 !important;
-        color: #121212 !important;
+        background: linear-gradient(135deg, #14B8A6 0%, #10B981 100%) !important;
+        color: #0F172A !important;
     }
     .score-medium {
-        background-color: #008F7A !important;
-        color: #FFFFFF !important;
+        background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%) !important;
+        color: #0F172A !important;
     }
     .score-low {
-        background-color: #4A5568 !important;
-        color: #FFFFFF !important;
+        background: linear-gradient(135deg, #64748B 0%, #475569 100%) !important;
+        color: #F8FAFC !important;
     }
-    
+
+    /* Agent status badges */
+    .agent-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .agent-badge.active {
+        background: rgba(20, 184, 166, 0.15);
+        color: #2DD4BF;
+        border: 1px solid #14B8A6;
+    }
+    .agent-badge.complete {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ADE80;
+        border: 1px solid #22C55E;
+    }
+
+    /* Metrics cards */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%) !important;
+        border-radius: 12px !important;
+        padding: 1rem !important;
+        border: 1px solid rgba(148, 163, 184, 0.1) !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #14B8A6 !important;
+        font-weight: 700 !important;
+    }
+
+    /* Progress bar with gradient */
+    .stProgress > div > div {
+        background: linear-gradient(90deg, #14B8A6 0%, #2DD4BF 100%) !important;
+        border-radius: 9999px !important;
+    }
+
     /* Footer styling */
     .footer {
         position: fixed;
         left: 0;
         bottom: 0;
         width: 100%;
-        background-color: #121212;
-        color: #FFFFFF;
+        background: linear-gradient(180deg, transparent 0%, #0F172A 100%);
+        color: #94A3B8;
         text-align: center;
-        padding: 10px;
-        border-top: 1px solid #00BFA5;
+        padding: 15px;
         font-size: 12px;
         z-index: 999;
     }
     .footer a {
-        color: #00BFA5;
+        color: #14B8A6;
         text-decoration: none;
+        transition: color 0.2s ease;
     }
     .footer a:hover {
-        text-decoration: underline;
+        color: #2DD4BF;
     }
-    
+
     /* Success/Error messages */
     .stSuccess {
-        background-color: #1E1E1E !important;
+        background: rgba(34, 197, 94, 0.1) !important;
+        border: 1px solid rgba(34, 197, 94, 0.3) !important;
+        border-radius: 12px !important;
     }
     .stError {
-        background-color: #1E1E1E !important;
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.3) !important;
+        border-radius: 12px !important;
+    }
+
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background: rgba(30, 41, 59, 0.5) !important;
+        border-radius: 8px !important;
+    }
+
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Spinner styling */
+    .stSpinner > div {
+        border-top-color: #14B8A6 !important;
+    }
+
+    /* Smooth scrolling */
+    html {
+        scroll-behavior: smooth;
     }
     </style>
 """, unsafe_allow_html=True)
