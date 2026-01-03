@@ -9,9 +9,9 @@ import logging
 import hashlib
 from typing import Dict, List, Optional, Any
 from config import settings
-from performance import HTTPConnectionPool
+from performance import HTTPConnectionPool, track_performance
 from cache_utils import get_cache
-from monitoring import get_metrics, track_performance
+from monitoring import get_metrics
 
 logger = logging.getLogger(__name__)
 
