@@ -46,7 +46,7 @@ class Settings:
             raise ValueError("XAI_API_KEY is required. Set it in Streamlit secrets or environment variables.")
         
         self.xai_api_base = get_setting("XAI_API_BASE", "https://api.x.ai/v1") or get_setting("xai_api_base", "https://api.x.ai/v1")
-        self.xai_model = get_setting("XAI_MODEL", "grok-4.1-fast") or get_setting("xai_model", "grok-4.1-fast")
+        self.xai_model = get_setting("XAI_MODEL", "grok-4-1-fast-reasoning") or get_setting("xai_model", "grok-4-1-fast-reasoning")
         
         # Application Configuration
         self.secret_key = get_setting("SECRET_KEY") or get_setting("secret_key")
