@@ -3,6 +3,5 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "streamlit run main.py --server.port=$PORT --server.address=0.0.0.0"
 healthcheckPath = "/_stcore/health"
 restartPolicyType = "always"

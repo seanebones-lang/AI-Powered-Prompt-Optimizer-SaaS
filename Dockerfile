@@ -29,24 +29,23 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
-# Expose Streamlit port
+# Expose Streamlit port (Railway will override with $PORT)
 EXPOSE 8501
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1
 
-# Default command: Run Streamlit app
-CMD ["streamlit", "run", "main.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--server.headless=true", \
-     "--browser.gatherUsageStats=false"]
+# Run startup script that handles $PORT variable
+CMD ["./start.sh"]
 
 # Alternative: Run FastAPI server
 # CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000"]
