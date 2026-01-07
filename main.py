@@ -1258,13 +1258,13 @@ def main():
         show_footer()
         return
     
-    # Check IP-based rate limit (for beta/public access)
-    client_ip = get_ip()
-    if client_ip != 'localhost' and client_ip != 'unknown':
-        if not check_ip_rate_limit(client_ip, max_requests=5, window_hours=24):
-            st.error("⚠️ Rate limit exceeded: 5 requests per 24 hours per IP. Try again later.")
-            show_footer()
-            st.stop()
+    # TESTING MODE: IP-based rate limiting disabled
+    # client_ip = get_ip()
+    # if client_ip != 'localhost' and client_ip != 'unknown':
+    #     if not check_ip_rate_limit(client_ip, max_requests=5, window_hours=24):
+    #         st.error("⚠️ Rate limit exceeded: 5 requests per 24 hours per IP. Try again later.")
+    #         show_footer()
+    #         st.stop()
     
     # Check for required environment variables
     try:
