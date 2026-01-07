@@ -321,24 +321,25 @@ def get_tier_for_user(user) -> PricingTier:
     """
     Determine the pricing tier for a user based on their subscription status.
 
+    TESTING MODE: Always returns PRO tier to bypass payment requirements.
+
     Args:
         user: User database object
 
     Returns:
         PricingTier enum value
     """
-    if not user:
-        return PricingTier.FREE
+    # TESTING MODE: Always return PRO tier for all users
+    return PricingTier.PRO
 
-    # Check if user has active premium subscription
-    if user.is_premium:
-        if user.subscription_expires_at:
-            if user.subscription_expires_at > datetime.utcnow():
-                # Determine tier based on some attribute (simplified)
-                # In production, store tier in database
-                return PricingTier.PRO
-
-    return PricingTier.FREE
+    # Original logic (commented out for testing):
+    # if not user:
+    #     return PricingTier.FREE
+    # if user.is_premium:
+    #     if user.subscription_expires_at:
+    #         if user.subscription_expires_at > datetime.utcnow():
+    #             return PricingTier.PRO
+    # return PricingTier.FREE
 
 
 def get_daily_limit_for_tier(tier: PricingTier) -> int:

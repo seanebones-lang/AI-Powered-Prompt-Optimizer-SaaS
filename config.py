@@ -58,11 +58,11 @@ class Settings:
         # Database
         self.database_url = get_setting("DATABASE_URL", "sqlite:///prompt_optimizer.db") or get_setting("database_url", "sqlite:///prompt_optimizer.db")
         
-        # Usage Limits
-        free_limit = get_setting("FREE_TIER_DAILY_LIMIT", "5") or get_setting("free_tier_daily_limit", "5")
-        paid_limit = get_setting("PAID_TIER_DAILY_LIMIT", "1000") or get_setting("paid_tier_daily_limit", "1000")
-        self.free_tier_daily_limit = int(free_limit) if free_limit else 5
-        self.paid_tier_daily_limit = int(paid_limit) if paid_limit else 1000
+        # Usage Limits (TESTING MODE - HIGH LIMITS)
+        free_limit = get_setting("FREE_TIER_DAILY_LIMIT", "9999") or get_setting("free_tier_daily_limit", "9999")
+        paid_limit = get_setting("PAID_TIER_DAILY_LIMIT", "9999") or get_setting("paid_tier_daily_limit", "9999")
+        self.free_tier_daily_limit = int(free_limit) if free_limit else 9999
+        self.paid_tier_daily_limit = int(paid_limit) if paid_limit else 9999
         
         # Grok Collections API Configuration (Optional - for RAG)
         self.collection_id_prompt_examples = get_setting("COLLECTION_ID_PROMPT_EXAMPLES") or get_setting("collection_id_prompt_examples")
@@ -84,8 +84,8 @@ if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING"):
             self.xai_model = os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning")
             self.secret_key = os.getenv("SECRET_KEY", "test_secret")
             self.database_url = os.getenv("DATABASE_URL", "sqlite:///test.db")
-            self.free_tier_daily_limit = int(os.getenv("FREE_TIER_DAILY_LIMIT", "5"))
-            self.paid_tier_daily_limit = int(os.getenv("PAID_TIER_DAILY_LIMIT", "1000"))
+            self.free_tier_daily_limit = int(os.getenv("FREE_TIER_DAILY_LIMIT", "9999"))
+            self.paid_tier_daily_limit = int(os.getenv("PAID_TIER_DAILY_LIMIT", "9999"))
             self.collection_id_prompt_examples = os.getenv("COLLECTION_ID_PROMPT_EXAMPLES")
             self.collection_id_marketing = os.getenv("COLLECTION_ID_MARKETING")
             self.collection_id_technical = os.getenv("COLLECTION_ID_TECHNICAL")
