@@ -72,17 +72,22 @@ def get_ip():
 def check_ip_rate_limit(ip: str, max_requests: int = 5, window_hours: int = 24) -> bool:
     """
     Check if IP has exceeded rate limit.
-    
+
     Args:
         ip: IP address
         max_requests: Maximum requests allowed
         window_hours: Time window in hours
-    
+
     Returns:
         True if within limit, False if exceeded
-    
+
     Security: Fails closed (returns False on error) to prevent bypassing rate limits.
     """
+    # Whitelist owner's IP - no rate limits
+    WHITELISTED_IPS = ['69.110.193.185']
+    if ip in WHITELISTED_IPS:
+        return True
+
     try:
         cutoff = time.time() - (window_hours * 3600)
         # Clean old records
