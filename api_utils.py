@@ -156,8 +156,18 @@ class GrokAPI:
                     logger.error(f"API returned status {response.status_code}: {error_text}")
                     try:
                         error_data = response.json()
-                        error_msg = error_data.get("error", {}).get("message", error_text)
-                    except (json.JSONDecodeError, ValueError, KeyError):
+                        # Handle both dict and string error formats
+                        if isinstance(error_data, dict):
+                            error_field = error_data.get("error", error_text)
+                            if isinstance(error_field, dict):
+                                error_msg = error_field.get("message", error_text)
+                            elif isinstance(error_field, str):
+                                error_msg = error_field
+                            else:
+                                error_msg = error_text
+                        else:
+                            error_msg = error_text
+                    except (json.JSONDecodeError, ValueError, KeyError, AttributeError):
                         error_msg = error_text
                     raise Exception(f"API error ({response.status_code}): {error_msg}")
 
