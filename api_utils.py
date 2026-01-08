@@ -134,7 +134,9 @@ class GrokAPI:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
+            # DEBUG: Log API key details
+            logger.info(f"API Key length: {len(self.api_key)}, starts: {self.api_key[:10]}..., ends: ...{self.api_key[-6:]}")
             logger.debug(f"Making API request to {url} with model {self.model}")
 
             # Use connection pooling for better performance
