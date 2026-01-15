@@ -170,6 +170,232 @@ class SavedPrompt(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AgentBlueprint(Base):
+    """Model for agent blueprints - complete agent architecture specifications."""
+    __tablename__ = "agent_blueprints"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    blueprint_id = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    version = Column(String(20), default="1.0.0")
+    agent_type = Column(String(50), nullable=False)  # conversational, task_executor, etc.
+    domain = Column(String(100))
+    description = Column(Text)
+    
+    # Core components (stored as JSON)
+    system_prompt = Column(Text, nullable=False)
+    personality_traits = Column(Text)  # JSON array
+    capabilities = Column(Text)  # JSON array
+    constraints = Column(Text)  # JSON array
+    
+    # Tools and integrations (stored as JSON)
+    tools = Column(Text)  # JSON array of tool definitions
+    integrations = Column(Text)  # JSON array of integration requirements
+    
+    # Workflow (stored as JSON)
+    workflow_steps = Column(Text)  # JSON array
+    orchestration_pattern = Column(String(200))
+    
+    # Configuration (stored as JSON)
+    model_config = Column(Text)  # JSON object
+    
+    # Testing (stored as JSON)
+    test_scenarios = Column(Text)  # JSON array
+    validation_rules = Column(Text)  # JSON array
+    
+    # Deployment (stored as JSON)
+    deployment_config = Column(Text)  # JSON object
+    monitoring_metrics = Column(Text)  # JSON array
+    scaling_strategy = Column(String(200))
+    
+    # Documentation (stored as JSON)
+    usage_examples = Column(Text)  # JSON array
+    best_practices = Column(Text)  # JSON array
+    known_limitations = Column(Text)  # JSON array
+    
+    # Metadata
+    is_favorite = Column(Boolean, default=False)
+    is_template = Column(Boolean, default=False)
+    tags = Column(Text)  # JSON array
+    folder = Column(String(100), default="default")
+    parent_blueprint_id = Column(Integer, ForeignKey("agent_blueprints.id"), nullable=True)  # For versioning
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", backref="blueprints")
+    versions = relationship("AgentBlueprint", backref="parent", remote_side=[id])
+
+
+class PromptVersion(Base):
+    """Model for prompt version control."""
+    __tablename__ = "prompt_versions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    prompt_id = Column(String(100), nullable=False, index=True)  # Groups versions together
+    version_number = Column(Integer, nullable=False)
+    prompt_text = Column(Text, nullable=False)
+    prompt_type = Column(String(50))
+    quality_score = Column(Integer)
+    change_description = Column(Text)  # What changed in this version
+    parent_version_id = Column(Integer, ForeignKey("prompt_versions.id"), nullable=True)
+    is_current = Column(Boolean, default=True)  # Current active version
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String(100))  # Username or "system"
+    
+    # Relationships
+    user = relationship("User", backref="prompt_versions")
+    parent = relationship("PromptVersion", remote_side=[id], backref="children")
+
+
+class RefinementHistory(Base):
+    """Model for iterative refinement tracking."""
+    __tablename__ = "refinement_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id = Column(Integer, ForeignKey("optimization_sessions.id"), nullable=True)
+    iteration_number = Column(Integer, nullable=False)
+    prompt_text = Column(Text, nullable=False)
+    user_feedback = Column(Text)  # What the user didn't like
+    changes_made = Column(Text)  # What was changed
+    quality_score = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", backref="refinements")
+    session = relationship("OptimizationSession", backref="refinements")
+
+
+class TestCase(Base):
+    """Model for generated test cases."""
+    __tablename__ = "test_cases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    blueprint_id = Column(Integer, ForeignKey("agent_blueprints.id"), nullable=True)
+    prompt_id = Column(String(100), nullable=True)  # Link to prompt if not blueprint
+    
+    test_name = Column(String(200), nullable=False)
+    test_type = Column(String(50))  # happy_path, edge_case, error_handling, load_test
+    input_data = Column(Text, nullable=False)
+    expected_output = Column(Text)
+    success_criteria = Column(Text)  # JSON array
+    actual_output = Column(Text, nullable=True)  # Filled when test is run
+    passed = Column(Boolean, nullable=True)  # Null = not run yet
+    error_message = Column(Text, nullable=True)
+    execution_time = Column(Float, nullable=True)  # seconds
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_run_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    user = relationship("User", backref="test_cases")
+    blueprint = relationship("AgentBlueprint", backref="test_cases")
+
+
+class KnowledgeBase(Base):
+    """Model for custom domain knowledge bases."""
+    __tablename__ = "knowledge_bases"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    domain = Column(String(100))
+    is_private = Column(Boolean, default=True)
+    
+    # Storage info
+    document_count = Column(Integer, default=0)
+    total_chunks = Column(Integer, default=0)
+    vector_store_path = Column(String(500))  # Path to vector store
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", backref="knowledge_bases")
+    documents = relationship("KnowledgeDocument", back_populates="knowledge_base")
+
+
+class KnowledgeDocument(Base):
+    """Model for documents in knowledge bases."""
+    __tablename__ = "knowledge_documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=False)
+    filename = Column(String(500), nullable=False)
+    file_type = Column(String(50))  # pdf, txt, md, docx, etc.
+    file_size = Column(Integer)  # bytes
+    content_hash = Column(String(64))  # SHA-256 hash for deduplication
+    
+    # Processing info
+    chunk_count = Column(Integer, default=0)
+    processed = Column(Boolean, default=False)
+    processing_error = Column(Text, nullable=True)
+    
+    # Metadata
+    tags = Column(Text)  # JSON array
+    category = Column(String(100))
+    
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    knowledge_base = relationship("KnowledgeBase", back_populates="documents")
+
+
+class CollaborationShare(Base):
+    """Model for sharing prompts/blueprints with team members."""
+    __tablename__ = "collaboration_shares"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    shared_with_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # What's being shared
+    resource_type = Column(String(50), nullable=False)  # prompt, blueprint, knowledge_base
+    resource_id = Column(Integer, nullable=False)
+    
+    # Permissions
+    can_view = Column(Boolean, default=True)
+    can_edit = Column(Boolean, default=False)
+    can_comment = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    owner = relationship("User", foreign_keys=[owner_id], backref="shares_given")
+    shared_with = relationship("User", foreign_keys=[shared_with_id], backref="shares_received")
+
+
+class Comment(Base):
+    """Model for comments and annotations."""
+    __tablename__ = "comments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # What's being commented on
+    resource_type = Column(String(50), nullable=False)  # prompt, blueprint, etc.
+    resource_id = Column(Integer, nullable=False)
+    
+    # Comment content
+    content = Column(Text, nullable=False)
+    parent_comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)  # For replies
+    is_resolved = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", backref="comments")
+    replies = relationship("Comment", backref="parent", remote_side=[id])
+
+
 class Database:
     """Database management class."""
     
@@ -806,6 +1032,502 @@ class Database:
                     except json.JSONDecodeError:
                         continue
             return list(set(all_tags))  # Remove duplicates
+        finally:
+            db.close()
+    
+    # Agent Blueprint Methods
+    def save_blueprint(
+        self,
+        user_id: Optional[int],
+        blueprint_data: Dict
+    ) -> Optional[AgentBlueprint]:
+        """Save an agent blueprint to the database."""
+        db = self.get_session()
+        try:
+            blueprint = AgentBlueprint(
+                user_id=user_id,
+                blueprint_id=blueprint_data.get("blueprint_id"),
+                name=blueprint_data.get("name"),
+                version=blueprint_data.get("version", "1.0.0"),
+                agent_type=blueprint_data.get("agent_type"),
+                domain=blueprint_data.get("domain"),
+                description=blueprint_data.get("description"),
+                system_prompt=blueprint_data.get("system_prompt"),
+                personality_traits=json.dumps(blueprint_data.get("personality_traits", [])),
+                capabilities=json.dumps(blueprint_data.get("capabilities", [])),
+                constraints=json.dumps(blueprint_data.get("constraints", [])),
+                tools=json.dumps(blueprint_data.get("tools", [])),
+                integrations=json.dumps(blueprint_data.get("integrations", [])),
+                workflow_steps=json.dumps(blueprint_data.get("workflow_steps", [])),
+                orchestration_pattern=blueprint_data.get("orchestration_pattern"),
+                model_config=json.dumps(blueprint_data.get("model_config", {})),
+                test_scenarios=json.dumps(blueprint_data.get("test_scenarios", [])),
+                validation_rules=json.dumps(blueprint_data.get("validation_rules", [])),
+                deployment_config=json.dumps(blueprint_data.get("deployment_config", {})),
+                monitoring_metrics=json.dumps(blueprint_data.get("monitoring_metrics", [])),
+                scaling_strategy=blueprint_data.get("scaling_strategy"),
+                usage_examples=json.dumps(blueprint_data.get("usage_examples", [])),
+                best_practices=json.dumps(blueprint_data.get("best_practices", [])),
+                known_limitations=json.dumps(blueprint_data.get("known_limitations", [])),
+                tags=json.dumps(blueprint_data.get("tags", [])),
+                folder=blueprint_data.get("folder", "default"),
+                is_favorite=blueprint_data.get("is_favorite", False),
+                is_template=blueprint_data.get("is_template", False)
+            )
+            db.add(blueprint)
+            db.commit()
+            db.refresh(blueprint)
+            return blueprint
+        except SQLAlchemyError as e:
+            logger.error(f"Error saving blueprint: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_blueprints(
+        self,
+        user_id: Optional[int] = None,
+        folder: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        is_template: Optional[bool] = None
+    ) -> List[Dict]:
+        """Get agent blueprints with optional filtering."""
+        db = self.get_session()
+        try:
+            query = db.query(AgentBlueprint)
+            
+            if user_id is not None:
+                query = query.filter(AgentBlueprint.user_id == user_id)
+            if folder:
+                query = query.filter(AgentBlueprint.folder == folder)
+            if is_template is not None:
+                query = query.filter(AgentBlueprint.is_template == is_template)
+            
+            blueprints = query.order_by(AgentBlueprint.created_at.desc()).all()
+            
+            result = []
+            for bp in blueprints:
+                # Filter by tags if specified
+                if tags:
+                    bp_tags = json.loads(bp.tags) if bp.tags else []
+                    if not any(tag in bp_tags for tag in tags):
+                        continue
+                
+                result.append({
+                    "id": bp.id,
+                    "blueprint_id": bp.blueprint_id,
+                    "name": bp.name,
+                    "version": bp.version,
+                    "agent_type": bp.agent_type,
+                    "domain": bp.domain,
+                    "description": bp.description,
+                    "folder": bp.folder,
+                    "is_favorite": bp.is_favorite,
+                    "is_template": bp.is_template,
+                    "tags": json.loads(bp.tags) if bp.tags else [],
+                    "created_at": bp.created_at.isoformat()
+                })
+            
+            return result
+        finally:
+            db.close()
+    
+    def get_blueprint_by_id(self, blueprint_id: str) -> Optional[Dict]:
+        """Get full blueprint details by ID."""
+        db = self.get_session()
+        try:
+            bp = db.query(AgentBlueprint).filter(
+                AgentBlueprint.blueprint_id == blueprint_id
+            ).first()
+            
+            if not bp:
+                return None
+            
+            return {
+                "id": bp.id,
+                "blueprint_id": bp.blueprint_id,
+                "name": bp.name,
+                "version": bp.version,
+                "agent_type": bp.agent_type,
+                "domain": bp.domain,
+                "description": bp.description,
+                "system_prompt": bp.system_prompt,
+                "personality_traits": json.loads(bp.personality_traits) if bp.personality_traits else [],
+                "capabilities": json.loads(bp.capabilities) if bp.capabilities else [],
+                "constraints": json.loads(bp.constraints) if bp.constraints else [],
+                "tools": json.loads(bp.tools) if bp.tools else [],
+                "integrations": json.loads(bp.integrations) if bp.integrations else [],
+                "workflow_steps": json.loads(bp.workflow_steps) if bp.workflow_steps else [],
+                "orchestration_pattern": bp.orchestration_pattern,
+                "model_config": json.loads(bp.model_config) if bp.model_config else {},
+                "test_scenarios": json.loads(bp.test_scenarios) if bp.test_scenarios else [],
+                "validation_rules": json.loads(bp.validation_rules) if bp.validation_rules else [],
+                "deployment_config": json.loads(bp.deployment_config) if bp.deployment_config else {},
+                "monitoring_metrics": json.loads(bp.monitoring_metrics) if bp.monitoring_metrics else [],
+                "scaling_strategy": bp.scaling_strategy,
+                "usage_examples": json.loads(bp.usage_examples) if bp.usage_examples else [],
+                "best_practices": json.loads(bp.best_practices) if bp.best_practices else [],
+                "known_limitations": json.loads(bp.known_limitations) if bp.known_limitations else [],
+                "folder": bp.folder,
+                "is_favorite": bp.is_favorite,
+                "is_template": bp.is_template,
+                "tags": json.loads(bp.tags) if bp.tags else [],
+                "created_at": bp.created_at.isoformat(),
+                "updated_at": bp.updated_at.isoformat()
+            }
+        finally:
+            db.close()
+    
+    # Prompt Versioning Methods
+    def create_prompt_version(
+        self,
+        user_id: Optional[int],
+        prompt_id: str,
+        version_number: int,
+        prompt_text: str,
+        prompt_type: Optional[str] = None,
+        quality_score: Optional[int] = None,
+        change_description: Optional[str] = None,
+        parent_version_id: Optional[int] = None,
+        created_by: str = "user"
+    ) -> Optional[PromptVersion]:
+        """Create a new prompt version."""
+        db = self.get_session()
+        try:
+            # Mark previous versions as not current
+            db.query(PromptVersion).filter(
+                PromptVersion.prompt_id == prompt_id,
+                PromptVersion.is_current == True
+            ).update({"is_current": False})
+            
+            version = PromptVersion(
+                user_id=user_id,
+                prompt_id=prompt_id,
+                version_number=version_number,
+                prompt_text=prompt_text,
+                prompt_type=prompt_type,
+                quality_score=quality_score,
+                change_description=change_description,
+                parent_version_id=parent_version_id,
+                is_current=True,
+                created_by=created_by
+            )
+            db.add(version)
+            db.commit()
+            db.refresh(version)
+            return version
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating prompt version: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_prompt_versions(self, prompt_id: str) -> List[Dict]:
+        """Get all versions of a prompt."""
+        db = self.get_session()
+        try:
+            versions = db.query(PromptVersion).filter(
+                PromptVersion.prompt_id == prompt_id
+            ).order_by(PromptVersion.version_number.desc()).all()
+            
+            return [{
+                "id": v.id,
+                "version_number": v.version_number,
+                "prompt_text": v.prompt_text,
+                "prompt_type": v.prompt_type,
+                "quality_score": v.quality_score,
+                "change_description": v.change_description,
+                "is_current": v.is_current,
+                "created_at": v.created_at.isoformat(),
+                "created_by": v.created_by
+            } for v in versions]
+        finally:
+            db.close()
+    
+    # Refinement History Methods
+    def add_refinement(
+        self,
+        user_id: Optional[int],
+        session_id: Optional[int],
+        iteration_number: int,
+        prompt_text: str,
+        user_feedback: Optional[str] = None,
+        changes_made: Optional[str] = None,
+        quality_score: Optional[int] = None
+    ) -> Optional[RefinementHistory]:
+        """Add a refinement iteration."""
+        db = self.get_session()
+        try:
+            refinement = RefinementHistory(
+                user_id=user_id,
+                session_id=session_id,
+                iteration_number=iteration_number,
+                prompt_text=prompt_text,
+                user_feedback=user_feedback,
+                changes_made=changes_made,
+                quality_score=quality_score
+            )
+            db.add(refinement)
+            db.commit()
+            db.refresh(refinement)
+            return refinement
+        except SQLAlchemyError as e:
+            logger.error(f"Error adding refinement: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_refinement_history(self, session_id: int) -> List[Dict]:
+        """Get refinement history for a session."""
+        db = self.get_session()
+        try:
+            refinements = db.query(RefinementHistory).filter(
+                RefinementHistory.session_id == session_id
+            ).order_by(RefinementHistory.iteration_number).all()
+            
+            return [{
+                "id": r.id,
+                "iteration_number": r.iteration_number,
+                "prompt_text": r.prompt_text,
+                "user_feedback": r.user_feedback,
+                "changes_made": r.changes_made,
+                "quality_score": r.quality_score,
+                "created_at": r.created_at.isoformat()
+            } for r in refinements]
+        finally:
+            db.close()
+    
+    # Test Case Methods
+    def save_test_case(
+        self,
+        user_id: Optional[int],
+        test_data: Dict
+    ) -> Optional[TestCase]:
+        """Save a test case."""
+        db = self.get_session()
+        try:
+            test_case = TestCase(
+                user_id=user_id,
+                blueprint_id=test_data.get("blueprint_id"),
+                prompt_id=test_data.get("prompt_id"),
+                test_name=test_data.get("test_name"),
+                test_type=test_data.get("test_type"),
+                input_data=test_data.get("input_data"),
+                expected_output=test_data.get("expected_output"),
+                success_criteria=json.dumps(test_data.get("success_criteria", []))
+            )
+            db.add(test_case)
+            db.commit()
+            db.refresh(test_case)
+            return test_case
+        except SQLAlchemyError as e:
+            logger.error(f"Error saving test case: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_test_cases(
+        self,
+        user_id: Optional[int] = None,
+        blueprint_id: Optional[int] = None,
+        prompt_id: Optional[str] = None
+    ) -> List[Dict]:
+        """Get test cases with optional filtering."""
+        db = self.get_session()
+        try:
+            query = db.query(TestCase)
+            
+            if user_id is not None:
+                query = query.filter(TestCase.user_id == user_id)
+            if blueprint_id is not None:
+                query = query.filter(TestCase.blueprint_id == blueprint_id)
+            if prompt_id is not None:
+                query = query.filter(TestCase.prompt_id == prompt_id)
+            
+            test_cases = query.all()
+            
+            return [{
+                "id": tc.id,
+                "test_name": tc.test_name,
+                "test_type": tc.test_type,
+                "input_data": tc.input_data,
+                "expected_output": tc.expected_output,
+                "success_criteria": json.loads(tc.success_criteria) if tc.success_criteria else [],
+                "actual_output": tc.actual_output,
+                "passed": tc.passed,
+                "error_message": tc.error_message,
+                "execution_time": tc.execution_time,
+                "created_at": tc.created_at.isoformat(),
+                "last_run_at": tc.last_run_at.isoformat() if tc.last_run_at else None
+            } for tc in test_cases]
+        finally:
+            db.close()
+    
+    # Knowledge Base Methods
+    def create_knowledge_base(
+        self,
+        user_id: int,
+        name: str,
+        description: Optional[str] = None,
+        domain: Optional[str] = None,
+        is_private: bool = True
+    ) -> Optional[KnowledgeBase]:
+        """Create a new knowledge base."""
+        db = self.get_session()
+        try:
+            kb = KnowledgeBase(
+                user_id=user_id,
+                name=name,
+                description=description,
+                domain=domain,
+                is_private=is_private
+            )
+            db.add(kb)
+            db.commit()
+            db.refresh(kb)
+            return kb
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating knowledge base: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_knowledge_bases(self, user_id: int) -> List[Dict]:
+        """Get user's knowledge bases."""
+        db = self.get_session()
+        try:
+            kbs = db.query(KnowledgeBase).filter(
+                KnowledgeBase.user_id == user_id
+            ).all()
+            
+            return [{
+                "id": kb.id,
+                "name": kb.name,
+                "description": kb.description,
+                "domain": kb.domain,
+                "is_private": kb.is_private,
+                "document_count": kb.document_count,
+                "total_chunks": kb.total_chunks,
+                "created_at": kb.created_at.isoformat(),
+                "updated_at": kb.updated_at.isoformat()
+            } for kb in kbs]
+        finally:
+            db.close()
+    
+    # Collaboration Methods
+    def share_resource(
+        self,
+        owner_id: int,
+        shared_with_id: int,
+        resource_type: str,
+        resource_id: int,
+        can_view: bool = True,
+        can_edit: bool = False,
+        can_comment: bool = True
+    ) -> Optional[CollaborationShare]:
+        """Share a resource with another user."""
+        db = self.get_session()
+        try:
+            share = CollaborationShare(
+                owner_id=owner_id,
+                shared_with_id=shared_with_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                can_view=can_view,
+                can_edit=can_edit,
+                can_comment=can_comment
+            )
+            db.add(share)
+            db.commit()
+            db.refresh(share)
+            return share
+        except SQLAlchemyError as e:
+            logger.error(f"Error sharing resource: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def add_comment(
+        self,
+        user_id: int,
+        resource_type: str,
+        resource_id: int,
+        content: str,
+        parent_comment_id: Optional[int] = None
+    ) -> Optional[Comment]:
+        """Add a comment to a resource."""
+        db = self.get_session()
+        try:
+            comment = Comment(
+                user_id=user_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                content=content,
+                parent_comment_id=parent_comment_id
+            )
+            db.add(comment)
+            db.commit()
+            db.refresh(comment)
+            return comment
+        except SQLAlchemyError as e:
+            logger.error(f"Error adding comment: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+    
+    def get_comments(
+        self,
+        resource_type: str,
+        resource_id: int
+    ) -> List[Dict]:
+        """Get comments for a resource."""
+        db = self.get_session()
+        try:
+            comments = db.query(Comment).filter(
+                Comment.resource_type == resource_type,
+                Comment.resource_id == resource_id,
+                Comment.parent_comment_id == None  # Only top-level comments
+            ).order_by(Comment.created_at.desc()).all()
+            
+            result = []
+            for comment in comments:
+                # Get user info
+                user = db.query(User).filter(User.id == comment.user_id).first()
+                
+                # Get replies
+                replies = db.query(Comment).filter(
+                    Comment.parent_comment_id == comment.id
+                ).order_by(Comment.created_at).all()
+                
+                result.append({
+                    "id": comment.id,
+                    "user": {
+                        "id": user.id,
+                        "username": user.username
+                    } if user else None,
+                    "content": comment.content,
+                    "is_resolved": comment.is_resolved,
+                    "created_at": comment.created_at.isoformat(),
+                    "updated_at": comment.updated_at.isoformat(),
+                    "replies": [{
+                        "id": r.id,
+                        "user": {
+                            "id": db.query(User).filter(User.id == r.user_id).first().id,
+                            "username": db.query(User).filter(User.id == r.user_id).first().username
+                        },
+                        "content": r.content,
+                        "created_at": r.created_at.isoformat()
+                    } for r in replies]
+                })
+            
+            return result
         finally:
             db.close()
 
