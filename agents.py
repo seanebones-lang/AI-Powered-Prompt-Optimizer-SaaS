@@ -639,10 +639,6 @@ class OrchestratorAgent:
             'tree_of_thought': self.tree_of_thought
         }
         self.workflow = AgentWorkflow(self.agents_dict)
-
-            Response if identity-related, None otherwise
-        """
-        return grok_api.handle_identity_query(query)
     
     async def optimize_prompt(
         self,
