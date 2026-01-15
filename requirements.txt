@@ -1,5 +1,6 @@
 streamlit==1.52.0
 httpx>=0.27.0  # Direct HTTP client for xAI API (most compatible approach)
+# Note: httpx[http2] not required - using HTTP/1.1 for better compatibility
 python-dotenv==1.0.1
 sqlalchemy==2.0.36
 bcrypt==4.2.0

@@ -782,10 +782,12 @@ class OrchestratorAgent:
             if not design_result.success:
                 results["errors"].extend(design_result.errors)
                 return results
-            results["optimized_prompt"] = design_result.content
-            
-            # Extract just the optimized prompt text (may need refinement)
+            # Extract the optimized prompt text first
             optimized_prompt_text = self._extract_optimized_prompt(design_result.content)
+            
+            # Store both the full design output and the extracted prompt
+            results["optimized_prompt"] = optimized_prompt_text if optimized_prompt_text else design_result.content
+            results["design_output"] = design_result.content  # Keep full output for debugging
             
             # Phase 3: Generate sample output (with retry)
             logger.info("Generating sample output...")
@@ -873,29 +875,70 @@ Keep it brief and actionable."""
     
     def _extract_optimized_prompt(self, design_output: str) -> str:
         """Extract the optimized prompt text from designer output."""
-        # Simple extraction - look for markers like "Optimized Prompt:" or code blocks
+        if not design_output or not isinstance(design_output, str):
+            return ""
+        
+        # Try to extract from markdown code blocks first
+        import re
+        code_block_pattern = r'```(?:text|prompt|markdown)?\s*\n(.*?)\n```'
+        code_matches = re.findall(code_block_pattern, design_output, re.DOTALL)
+        if code_matches:
+            # Return the first code block that looks like a prompt (has reasonable length)
+            for match in code_matches:
+                cleaned = match.strip()
+                if len(cleaned) > 20:  # Reasonable minimum length
+                    return cleaned
+        
+        # Look for markers like "Optimized Prompt:" or "Here is the optimized prompt:"
         lines = design_output.split('\n')
         in_prompt = False
         prompt_lines = []
         
-        for line in lines:
-            if any(marker in line.lower() for marker in ["optimized prompt", "improved prompt", "refined prompt"]):
+        markers = [
+            "optimized prompt", "improved prompt", "refined prompt", 
+            "here is the", "the optimized version", "optimized version:",
+            "final prompt", "enhanced prompt"
+        ]
+        
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            # Check if this line contains a marker
+            if any(marker in line_lower for marker in markers):
                 in_prompt = True
+                # Skip the marker line itself
                 continue
             if in_prompt:
-                if line.strip().startswith('#') or line.strip().startswith('```'):
-                    if prompt_lines:  # If we already started collecting, stop
+                # Skip code block markers
+                if line.strip().startswith('```'):
+                    if prompt_lines:  # If we already started collecting, stop at code block end
                         break
                     continue
+                # Skip comment lines at start
+                if line.strip().startswith('#') and not prompt_lines:
+                    continue
+                # Collect the line
                 if line.strip():
                     prompt_lines.append(line)
                     # Stop if we hit explanation section
-                    if any(marker in line.lower() for marker in ["explanation", "improvements", "key changes"]):
+                    if any(marker in line_lower for marker in ["explanation", "improvements", "key changes", "summary", "notes"]):
+                        # Remove the last line if it's an explanation marker
+                        if prompt_lines:
+                            prompt_lines.pop()
                         break
+                # Stop if we've collected enough (likely got the prompt)
+                if len(prompt_lines) > 20:  # Reasonable max lines for a prompt
+                    break
         
         if prompt_lines:
-            return '\n'.join(prompt_lines).strip()
+            result = '\n'.join(prompt_lines).strip()
+            # Clean up common prefixes/suffixes
+            result = re.sub(r'^(optimized|improved|refined|enhanced)\s*prompt[:\s]*', '', result, flags=re.IGNORECASE)
+            return result
         
-        # Fallback: return first substantial paragraph
+        # Fallback: return first substantial paragraph (50+ chars)
         paragraphs = [p.strip() for p in design_output.split('\n\n') if len(p.strip()) > 50]
-        return paragraphs[0] if paragraphs else design_output[:500]
+        if paragraphs:
+            return paragraphs[0]
+        
+        # Last resort: return first 1000 chars (should contain the prompt)
+        return design_output[:1000].strip()

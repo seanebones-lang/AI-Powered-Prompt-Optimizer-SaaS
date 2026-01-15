@@ -272,7 +272,18 @@ def show_optimize_page():
             
             with tab1:
                 st.markdown("### Optimized Prompt")
-                st.code(result.get("optimized_prompt", ""), language="text")
+                optimized = result.get("optimized_prompt", "")
+                if not optimized or optimized.strip() == "":
+                    # Fallback: try to get from design_output or show error
+                    optimized = result.get("design_output", "No optimized prompt available. Check errors below.")
+                    if result.get("errors"):
+                        st.warning("⚠️ Optimization encountered errors. Showing raw design output:")
+                st.code(optimized, language="text")
+                
+                # Show extraction info if available
+                if result.get("design_output") and result.get("design_output") != optimized:
+                    with st.expander("🔍 View Full Design Output"):
+                        st.text(result.get("design_output"))
             
             with tab2:
                 st.markdown("### Deconstruction")

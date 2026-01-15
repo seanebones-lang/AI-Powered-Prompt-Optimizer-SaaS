@@ -75,11 +75,12 @@ class ConnectionPoolManager:
         if self._client is None or self._client.is_closed:
             with self._lock:
                 if self._client is None or self._client.is_closed:
+                    # Disable HTTP/2 to avoid h2 dependency requirement (HTTP/1.1 works fine)
                     self._client = httpx.Client(
                         timeout=self.timeout,
                         transport=self.transport,
                         limits=self.limits,
-                        http2=True,  # Enable HTTP/2 for better performance
+                        http2=False,  # Disabled to avoid h2 package requirement
                         follow_redirects=True
                     )
                     logger.info("Created new HTTP client with connection pooling")
