@@ -15,30 +15,30 @@ class AgentConfigManager:
     """Manages custom agent configurations for premium users."""
     
     DEFAULT_CONFIG = {
-        "temperature": 0.2,
+        "temperature": 0.4,
         "max_tokens": 4000,
         "deconstructor": {
-            "temperature": 0.2,
+            "temperature": 0.4,
             "max_tokens": 4000
         },
         "diagnoser": {
-            "temperature": 0.2,
+            "temperature": 0.4,
             "max_tokens": 4000
         },
         "designer": {
-            "temperature": 0.2,
+            "temperature": 0.7,
             "max_tokens": 4000
         },
         "evaluator": {
-            "temperature": 0.2,
+            "temperature": 0.3,
             "max_tokens": 4000
         },
         "chain_of_thought": {
-            "temperature": 0.3,
+            "temperature": 0.6,
             "max_tokens": 4000
         },
         "tree_of_thought": {
-            "temperature": 0.3,
+            "temperature": 0.7,
             "max_tokens": 4000
         },
         "use_parallel_execution": True,
