@@ -47,11 +47,17 @@ class GrokAPI:
             timeout: Request timeout in seconds (default: 60.0)
         """
         self.api_key = settings.xai_api_key
+        # API Base URL: https://api.x.ai/v1 (verified correct as of Jan 2026)
         self.base_url = settings.xai_api_base.rstrip('/')
+        # Model name: grok-4-1-fast-reasoning (use hyphens, not dots)
+        # This is the correct model identifier for xAI Grok 4.1 Fast Reasoning
         self.default_model = settings.xai_model  # Default: grok-4-1-fast-reasoning
         # Use fast-reasoning for both default and light model (fast reasoning is already optimized)
         self.light_model = getattr(settings, 'xai_light_model', self.default_model) or self.default_model
         self.timeout = timeout
+        
+        # Log configuration for debugging (without exposing API key)
+        logger.info(f"GrokAPI initialized: base_url={self.base_url}, model={self.default_model}")
     
     @track_performance("grok_api.generate_completion")
     def generate_completion(
@@ -165,10 +171,14 @@ class GrokAPI:
                         error_text = response.text
                         logger.error(f"API returned status {response.status_code}: {error_text}")
                         try:
-                            error_data = response.json()
-                            error_msg = error_data.get("error", {}).get("message", error_text)
-                        except (json.JSONDecodeError, ValueError, KeyError):
-                            error_msg = error_text
+                            # Try to parse as JSON first
+                            if isinstance(error_text, str) and error_text.strip().startswith('{'):
+                                error_data = response.json()
+                                error_msg = error_data.get("error", {}).get("message", error_text)
+                            else:
+                                error_msg = error_text
+                        except (json.JSONDecodeError, ValueError, KeyError, AttributeError):
+                            error_msg = error_text if isinstance(error_text, str) else str(error_text)
                         raise Exception(f"API error ({response.status_code}): {error_msg}")
 
                     # Parse JSON response
@@ -186,11 +196,20 @@ class GrokAPI:
             except CircuitBreakerOpenError as e:
                 logger.error(f"Circuit breaker is open: {str(e)}")
                 raise Exception(f"Service temporarily unavailable: {str(e)}")
+            except Exception as e:
+                # Re-raise any exceptions from _make_request
+                # This ensures we never return a string instead of raising
+                logger.error(f"Request failed in circuit breaker: {str(e)}")
+                raise
             
             # Validate response structure - ensure data is a dict
+            # This is critical: we must NEVER return a string from this function
             if not isinstance(data, dict):
-                logger.error(f"API returned non-dict response: {type(data)} - {data}")
-                raise Exception(f"API returned invalid response type: {type(data)}")
+                error_msg = f"API returned non-dict response: {type(data)}"
+                if isinstance(data, str):
+                    error_msg += f" - String content: {data[:200]}"
+                logger.error(error_msg)
+                raise Exception(error_msg)
             
             # Check for error field in response
             if "error" in data:
@@ -298,7 +317,8 @@ class GrokAPI:
             error_msg = str(e)
             logger.error(f"Error calling Grok API: {error_msg}", exc_info=True)
             
-            # Re-raise with clearer message
+            # Always raise a proper Exception (never return a string)
+            # This ensures callers get an exception, not a string response
             if "API error" in error_msg or "API returned" in error_msg:
                 raise Exception(error_msg)
             else:

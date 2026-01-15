@@ -45,7 +45,9 @@ class Settings:
         if not self.xai_api_key:
             raise ValueError("XAI_API_KEY is required. Set it in Streamlit secrets or environment variables.")
         
+        # xAI API Configuration - verified correct as of Jan 2026
         self.xai_api_base = get_setting("XAI_API_BASE", "https://api.x.ai/v1") or get_setting("xai_api_base", "https://api.x.ai/v1")
+        # Model name: grok-4-1-fast-reasoning (with hyphens, not dots)
         self.xai_model = get_setting("XAI_MODEL", "grok-4-1-fast-reasoning") or get_setting("xai_model", "grok-4-1-fast-reasoning")
         
         # Application Configuration
