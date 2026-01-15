@@ -97,10 +97,30 @@ class StructuredOutputParser:
 
 class PromptType(str, Enum):
     """Supported prompt types."""
+    # Agent Development
     BUILD_AGENT = "build_agent"
+    SYSTEM_PROMPT = "system_prompt"
+    AGENT_PERSONA = "agent_persona"
+    TOOL_DEFINITION = "tool_definition"
+    MULTI_AGENT_WORKFLOW = "multi_agent_workflow"
+    
+    # Build Planning
     REQUEST_BUILD = "request_build"
+    BUILD_PLAN = "build_plan"
+    ARCHITECTURE = "architecture"
+    API_DESIGN = "api_design"
     DEPLOYMENT_OPTIONS = "deployment_options"
     SYSTEM_IMPROVEMENT = "system_improvement"
+    
+    # Code & Technical
+    CODE_GENERATION = "code_generation"
+    CODE_REVIEW = "code_review"
+    DOCUMENTATION = "documentation"
+    
+    # Reasoning Modes
+    CHAIN_OF_THOUGHT = "chain_of_thought"
+    TREE_OF_THOUGHT = "tree_of_thought"
+    REFLECTION = "reflection"
 
 
 class AgentOutput(BaseModel):

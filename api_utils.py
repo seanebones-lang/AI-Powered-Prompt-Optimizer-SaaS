@@ -50,7 +50,7 @@ class GrokAPI:
         self.timeout = timeout
     
     @track_performance("grok_api.generate_completion")
-    async def generate_completion(
+    def generate_completion(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
@@ -144,27 +144,27 @@ class GrokAPI:
             metrics = get_metrics()
             llm_call_context = None
             with metrics.time_block("api_request"):
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.post(url, json=payload, headers=headers)
+                with httpx.Client(timeout=self.timeout) as client:
+                    response = client.post(url, json=payload, headers=headers)
                     # Log response status
-                    logger.debug(f"API response status: {response.status}")
+                    logger.debug(f"API response status: {response.status_code}")
 
                     # Handle non-200 status codes
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"API returned status {response.status}: {error_text}")
+                    if response.status_code != 200:
+                        error_text = response.text
+                        logger.error(f"API returned status {response.status_code}: {error_text}")
                         try:
-                            error_data = await response.json()
+                            error_data = response.json()
                             error_msg = error_data.get("error", {}).get("message", error_text)
                         except (json.JSONDecodeError, ValueError, KeyError):
                             error_msg = error_text
-                        raise Exception(f"API error ({response.status}): {error_msg}")
+                        raise Exception(f"API error ({response.status_code}): {error_msg}")
 
                     # Parse JSON response
                     try:
-                        data = await response.json()
+                        data = response.json()
                     except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse JSON response: {await response.text()}")
+                        logger.error(f"Failed to parse JSON response: {response.text}")
                         raise Exception(f"Invalid JSON response from API: {str(e)}")
             
             # Validate response structure - ensure data is a dict
