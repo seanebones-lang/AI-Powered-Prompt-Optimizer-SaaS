@@ -121,6 +121,12 @@ class PromptType(str, Enum):
     CHAIN_OF_THOUGHT = "chain_of_thought"
     TREE_OF_THOUGHT = "tree_of_thought"
     REFLECTION = "reflection"
+    
+    # General/Fallback
+    GENERAL = "general"
+    CREATIVE = "creative"
+    TECHNICAL = "technical"
+    ANALYTICAL = "analytical"
 
 
 class AgentOutput(BaseModel):

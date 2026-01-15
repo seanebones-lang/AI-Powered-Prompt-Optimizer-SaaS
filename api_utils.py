@@ -7,13 +7,16 @@ Uses direct HTTP requests with httpx - verified working approach as of Jan 2026.
 import json
 import logging
 import hashlib
+import httpx
 from typing import Dict, List, Optional, Any
 from config import settings
 from performance import HTTPConnectionPool, track_performance
-import asyncio
 from cache_utils import get_cache
 from monitoring import get_metrics
 from observability import get_tracker
+from circuit_breaker import get_api_circuit_breaker, CircuitBreakerOpenError
+from cost_tracker import get_cost_optimizer
+from connection_pool import get_pooled_client
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +103,14 @@ class GrokAPI:
         
         # Get LLM call tracker for observability
         tracker = get_tracker()
+        
+        # Get circuit breaker and cost optimizer
+        circuit_breaker = get_api_circuit_breaker()
+        cost_optimizer = get_cost_optimizer()
 
         try:
+            # Wrap API call in circuit breaker
+            def _make_request():
             messages = []
 
             # Build system prompt with persona enforcement
@@ -137,35 +146,45 @@ class GrokAPI:
                 "Content-Type": "application/json"
             }
             
-            logger.debug(f"Making API request to {url} with model {self.model}")
+            logger.debug(f"Making API request to {url} with model {payload['model']}")
 
-            # Use connection pooling for better performance
-            # Track LLM call for observability (cost, latency, tokens)
-            metrics = get_metrics()
-            llm_call_context = None
-            with metrics.time_block("api_request"):
-                with httpx.Client(timeout=self.timeout) as client:
+                # Use connection pooling for better performance
+                # Track LLM call for observability (cost, latency, tokens)
+                metrics = get_metrics()
+                llm_call_context = None
+                with metrics.time_block("api_request"):
+                    # Use pooled client for connection reuse
+                    client = get_pooled_client()
                     response = client.post(url, json=payload, headers=headers)
-                    # Log response status
-                    logger.debug(f"API response status: {response.status_code}")
+                        # Log response status
+                        logger.debug(f"API response status: {response.status_code}")
 
-                    # Handle non-200 status codes
-                    if response.status_code != 200:
-                        error_text = response.text
-                        logger.error(f"API returned status {response.status_code}: {error_text}")
+                        # Handle non-200 status codes
+                        if response.status_code != 200:
+                            error_text = response.text
+                            logger.error(f"API returned status {response.status_code}: {error_text}")
+                            try:
+                                error_data = response.json()
+                                error_msg = error_data.get("error", {}).get("message", error_text)
+                            except (json.JSONDecodeError, ValueError, KeyError):
+                                error_msg = error_text
+                            raise Exception(f"API error ({response.status_code}): {error_msg}")
+
+                        # Parse JSON response
                         try:
-                            error_data = response.json()
-                            error_msg = error_data.get("error", {}).get("message", error_text)
-                        except (json.JSONDecodeError, ValueError, KeyError):
-                            error_msg = error_text
-                        raise Exception(f"API error ({response.status_code}): {error_msg}")
-
-                    # Parse JSON response
-                    try:
-                        data = response.json()
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse JSON response: {response.text}")
-                        raise Exception(f"Invalid JSON response from API: {str(e)}")
+                            data = response.json()
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse JSON response: {response.text}")
+                            raise Exception(f"Invalid JSON response from API: {str(e)}")
+                
+                return data
+            
+            # Execute request through circuit breaker
+            try:
+                data = circuit_breaker.call(_make_request)
+            except CircuitBreakerOpenError as e:
+                logger.error(f"Circuit breaker is open: {str(e)}")
+                raise Exception(f"Service temporarily unavailable: {str(e)}")
             
             # Validate response structure - ensure data is a dict
             if not isinstance(data, dict):
@@ -220,8 +239,16 @@ class GrokAPI:
                 usage_data = {}
             
             # Track LLM call for observability (cost, latency, tokens)
-            with tracker.track_call(self.model) as llm_call:
+            with tracker.track_call(payload['model']) as llm_call:
                 llm_call.set_tokens(usage_data)
+            
+            # Record cost
+            cost_optimizer.record_cost(
+                model=payload['model'],
+                prompt_tokens=usage_data.get("prompt_tokens", 0) or 0,
+                completion_tokens=usage_data.get("completion_tokens", 0) or 0,
+                operation="api_completion"
+            )
 
             # Handle tool calls if present
             tool_calls = None
@@ -363,7 +390,7 @@ class GrokAPI:
         return None
 
 
-# Synchronous wrapper functions for convenience
+# Module-level convenience function (already synchronous)
 def generate_completion(
     prompt: str,
     system_prompt: Optional[str] = None,
@@ -372,19 +399,18 @@ def generate_completion(
     **kwargs
 ) -> Dict[str, Any]:
     """
-    Synchronous wrapper for generate_completion.
+    Convenience function for generating completions.
     
-    This function wraps the async generate_completion method and runs it synchronously.
-    Use this for non-async code that needs to call the API.
+    This is a synchronous wrapper around the GrokAPI class.
     """
     api = GrokAPI()
-    return asyncio.run(api.generate_completion(
+    return api.generate_completion(
         prompt=prompt,
         system_prompt=system_prompt,
         temperature=temperature,
         max_tokens=max_tokens,
         **kwargs
-    ))
+    )
 
 
 # Global API instance
