@@ -65,3 +65,16 @@ def cache_response(prompt: str, agent_name: str, response: Dict[str, Any]):
         'response': response
     }
     save_agent_cache(cache)
+
+
+
+def get_cache():
+    """Get a simple cache instance."""
+    class SimpleCache:
+        def __init__(self):
+            self._cache = {}
+        def get(self, key):
+            return self._cache.get(key)
+        def set(self, key, value, ttl=3600):
+            self._cache[key] = value
+    return SimpleCache()

@@ -10,7 +10,6 @@ import hashlib
 from typing import Dict, List, Optional, Any
 from config import settings
 from performance import HTTPConnectionPool, track_performance
-import aiohttp
 import asyncio
 from cache_utils import get_cache
 from monitoring import get_metrics
@@ -145,28 +144,28 @@ class GrokAPI:
             metrics = get_metrics()
             llm_call_context = None
             with metrics.time_block("api_request"):
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(url, json=payload, headers=headers, timeout=self.timeout) as response:
-                        # Log response status
-                        logger.debug(f"API response status: {response.status}")
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(url, json=payload, headers=headers)
+                    # Log response status
+                    logger.debug(f"API response status: {response.status}")
 
-                        # Handle non-200 status codes
-                        if response.status != 200:
-                            error_text = await response.text()
-                            logger.error(f"API returned status {response.status}: {error_text}")
-                            try:
-                                error_data = await response.json()
-                                error_msg = error_data.get("error", {}).get("message", error_text)
-                            except (json.JSONDecodeError, ValueError, KeyError):
-                                error_msg = error_text
-                            raise Exception(f"API error ({response.status}): {error_msg}")
-
-                        # Parse JSON response
+                    # Handle non-200 status codes
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"API returned status {response.status}: {error_text}")
                         try:
-                            data = await response.json()
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse JSON response: {await response.text()}")
-                            raise Exception(f"Invalid JSON response from API: {str(e)}")
+                            error_data = await response.json()
+                            error_msg = error_data.get("error", {}).get("message", error_text)
+                        except (json.JSONDecodeError, ValueError, KeyError):
+                            error_msg = error_text
+                        raise Exception(f"API error ({response.status}): {error_msg}")
+
+                    # Parse JSON response
+                    try:
+                        data = await response.json()
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse JSON response: {await response.text()}")
+                        raise Exception(f"Invalid JSON response from API: {str(e)}")
             
             # Validate response structure - ensure data is a dict
             if not isinstance(data, dict):
