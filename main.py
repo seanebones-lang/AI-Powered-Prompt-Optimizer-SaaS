@@ -91,14 +91,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# Initialize session state - NO LOGIN REQUIRED
 def init_session_state():
     """Initialize all session state variables."""
     defaults = {
-        'authenticated': False,
-        'user_id': None,
-        'username': None,
-        'is_premium': False,
+        'authenticated': True,  # ALWAYS TRUE - NO LOGIN
+        'user_id': 1,
+        'username': 'User',
+        'is_premium': True,  # ALWAYS TRUE - NO PAYWALL
         'current_prompt': "",
         'optimization_result': None,
         'agent_config': AgentConfigManager.DEFAULT_CONFIG.copy(),
@@ -114,74 +114,12 @@ def init_session_state():
 
 init_session_state()
 
-# Helper functions
+# NO HELPER FUNCTIONS - NO CHECKS - EVERYTHING UNLOCKED
 def check_premium(feature_name: str = "This feature") -> bool:
-    """Check if user has premium access."""
-    if not st.session_state.is_premium:
-        st.warning(f"🔒 {feature_name} is a premium feature. Upgrade to access!")
-        return False
-    return True
+    return True  # ALWAYS TRUE
 
 def check_auth() -> bool:
-    """Check if user is authenticated."""
-    if not st.session_state.authenticated:
-        st.warning("Please log in to access this feature.")
-        return False
-    return True
-
-# Authentication functions
-def show_login_page():
-    """Display login/register page."""
-    st.markdown('<h1 class="main-header">🚀 NextEleven AI - Prompt Optimizer</h1>', unsafe_allow_html=True)
-    
-    tab1, tab2 = st.tabs(["Login", "Register"])
-    
-    with tab1:
-        st.subheader("Login")
-        username = st.text_input("Username", key="login_username")
-        password = st.text_input("Password", type="password", key="login_password")
-        
-        if st.button("Login", type="primary"):
-            if username and password:
-                user = db.authenticate_user(username, password)
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.user_id = user.id
-                    st.session_state.username = user.username
-                    st.session_state.is_premium = user.is_premium
-                    st.success(f"Welcome back, {username}!")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
-            else:
-                st.error("Please enter both username and password")
-    
-    with tab2:
-        st.subheader("Register")
-        new_username = st.text_input("Username", key="reg_username")
-        new_email = st.text_input("Email", key="reg_email")
-        new_password = st.text_input("Password", type="password", key="reg_password")
-        confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm")
-        
-        if st.button("Register", type="primary"):
-            # Validate inputs
-            is_valid_user, _, user_error = validate_username(new_username)
-            is_valid_email, _, email_error = validate_email(new_email)
-            
-            if not is_valid_user:
-                st.error(f"Invalid username: {user_error}")
-            elif not is_valid_email:
-                st.error(f"Invalid email: {email_error}")
-            elif new_password != confirm_password:
-                st.error("Passwords do not match")
-            elif len(new_password) < 8:
-                st.error("Password must be at least 8 characters")
-            else:
-                try:
-                    user = db.create_user(new_username, new_email, new_password)
-                    st.success("Account created! Please log in.")
-                except Exception as e:
-                    st.error(f"Registration failed: {str(e)}")
+    return True  # ALWAYS TRUE
 
 # Main pages
 def show_optimize_page():
@@ -281,15 +219,7 @@ def show_optimize_page():
                         st.session_state.optimization_result = result
                         st.session_state.history.append(result)
                         
-                        # Save to database
-                        if st.session_state.authenticated:
-                            db.save_optimization_session(
-                                user_id=st.session_state.user_id,
-                                original_prompt=sanitized,
-                                optimized_prompt=result.get("optimized_prompt"),
-                                prompt_type=prompt_type,
-                                quality_score=result.get("quality_score")
-                            )
+                        # Skip database save - not needed
                         
                         st.success("Optimization complete!")
                     except Exception as e:
@@ -351,9 +281,6 @@ def show_optimize_page():
 
 def show_batch_page():
     """Batch optimization page."""
-    if not check_premium("Batch optimization"):
-        return
-    
     st.markdown('<h2>📦 Batch Optimization</h2>', unsafe_allow_html=True)
     
     tab1, tab2, tab3 = st.tabs(["Manual Entry", "JSON Upload", "CSV Upload"])
@@ -384,9 +311,6 @@ def show_batch_page():
 
 def show_analytics_page():
     """Analytics dashboard page."""
-    if not check_auth():
-        return
-    
     st.markdown('<h2>📊 Analytics Dashboard</h2>', unsafe_allow_html=True)
     
     # Initialize analytics
@@ -419,9 +343,6 @@ def show_analytics_page():
 
 def show_ab_testing_page():
     """A/B testing page."""
-    if not check_premium("A/B Testing"):
-        return
-    
     st.markdown('<h2>🧪 A/B Testing</h2>', unsafe_allow_html=True)
     
     ab_tester = ABTesting()
@@ -459,9 +380,6 @@ def show_ab_testing_page():
 
 def show_enterprise_page():
     """Enterprise features page."""
-    if not check_premium("Enterprise Features"):
-        return
-    
     st.markdown('<h2>🏢 Enterprise Features</h2>', unsafe_allow_html=True)
     
     tab1, tab2, tab3, tab4 = st.tabs(["Blueprints", "Refinement", "Testing", "Security"])
@@ -521,9 +439,6 @@ def show_enterprise_page():
 
 def show_history_page():
     """Session history page."""
-    if not check_auth():
-        return
-    
     st.markdown('<h2>📚 Session History</h2>', unsafe_allow_html=True)
     
     sessions = db.get_user_sessions(st.session_state.user_id, limit=50)
@@ -583,9 +498,6 @@ def show_settings_page():
 
 def show_monitoring_page():
     """Monitoring dashboard."""
-    if not check_premium("Monitoring Dashboard"):
-        return
-    
     st.markdown('<h2>📡 Monitoring Dashboard</h2>', unsafe_allow_html=True)
     
     metrics = get_metrics()
@@ -604,16 +516,12 @@ def show_monitoring_page():
 # Main app
 def main():
     """Main application."""
-    # Check authentication
-    if not st.session_state.authenticated:
-        show_login_page()
-        return
+    # NO LOGIN CHECK - ALWAYS SHOW APP
     
     # Sidebar navigation
     with st.sidebar:
-        st.markdown(f"### Welcome, {st.session_state.username}!")
-        if st.session_state.is_premium:
-            st.markdown('<span class="premium-badge">PREMIUM</span>', unsafe_allow_html=True)
+        st.markdown("### 🚀 NextEleven AI")
+        st.markdown("**All Features Unlocked**")
         
         st.markdown("---")
         
@@ -635,11 +543,7 @@ def main():
                 st.rerun()
         
         st.markdown("---")
-        
-        if st.button("🚪 Logout", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
+        st.caption("No login • All features enabled")
     
     # Show selected page
     page_functions = {
