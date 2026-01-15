@@ -124,7 +124,7 @@ class BaseAgent:
     default_temperature: float = 0.5
     default_max_tokens: int = 1500
 
-    async def _call_api(
+    def _call_api(
         self,
         user_prompt: str,
         system_prompt: str,
@@ -569,7 +569,7 @@ Provide a structured reasoning process in a clear, organized format."""
         
         user_prompt = f"Guide me through solving this problem with a chain of thought approach:\n\n{prompt}"
         
-        return await self._call_api(user_prompt, system_prompt)
+        return self._call_api(user_prompt, system_prompt)
 
 class TreeOfThoughtAgent(BaseAgent):
     """Agent responsible for exploring multiple reasoning paths."""
@@ -589,7 +589,7 @@ Provide a comprehensive analysis of different thought paths in a clear, organize
         
         user_prompt = f"Explore different solutions to this problem using a tree of thought approach:\n\n{prompt}"
         
-        return await self._call_api(user_prompt, system_prompt)
+        return self._call_api(user_prompt, system_prompt)
 
 class OrchestratorAgent:
     """
