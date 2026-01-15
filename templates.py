@@ -423,7 +423,7 @@ interface [ModelName] {
 TOOL_TEMPLATES = [
     PromptTemplate(
         name="Tool Definition Schema",
-        template="""# Tool Definition: [TOOL_NAME]
+        template=r"""# Tool Definition: [TOOL_NAME]
 
 ## Overview
 **Purpose:** [BRIEF_DESCRIPTION]
@@ -438,9 +438,9 @@ def [FUNCTION_NAME](
     [PARAMETER_1]: [TYPE_1],
     [PARAMETER_2]: [TYPE_2] = [DEFAULT_VALUE]
 ) -> [RETURN_TYPE]:
-    """
+    \"\"\"
     [FUNCTION_DOCSTRING]
-    """
+    \"\"\"
 ```
 
 ### Parameters
