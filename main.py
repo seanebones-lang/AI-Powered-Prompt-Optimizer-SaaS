@@ -1024,6 +1024,19 @@ def show_monitoring_page():
 # Main app
 def main():
     """Main application."""
+    # Check configuration and show warnings
+    config_warnings = []
+    if settings.xai_api_key == "placeholder-key":
+        config_warnings.append("⚠️ XAI_API_KEY is not configured. Please set it in Railway environment variables.")
+    if settings.secret_key == "development-secret-key-placeholder":
+        config_warnings.append("⚠️ SECRET_KEY is not configured. Using development default.")
+
+    if config_warnings:
+        st.warning("Configuration Issues Detected:")
+        for warning in config_warnings:
+            st.write(warning)
+        st.markdown("---")
+
     # NO LOGIN CHECK - ALWAYS SHOW APP
     
     # Sidebar navigation
