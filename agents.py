@@ -192,15 +192,29 @@ class BaseAgent:
                 tools=tools
             )
 
+            # Validate response is a dict
+            if not isinstance(response, dict):
+                raise Exception(f"API returned non-dict response: {type(response)} - {str(response)[:200]}")
+
             execution_time_ms = (time.time() - start_time) * 1000
-            tokens_used = response["usage"]["total_tokens"]
+            
+            # Safely extract usage data
+            usage_data = response.get("usage", {})
+            if not isinstance(usage_data, dict):
+                usage_data = {}
+            tokens_used = usage_data.get("total_tokens", 0) or 0
+            
+            # Safely extract content
+            content = response.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content else ""
 
             output = AgentOutput(
                 success=True,
-                content=response["content"],
+                content=content,
                 metadata={
                     "tokens_used": tokens_used,
-                    "model": response["model"],
+                    "model": response.get("model", "unknown"),
                     "agent": self.name,
                     "execution_time_ms": round(execution_time_ms, 2)
                 }
@@ -872,10 +886,24 @@ Keep it brief and actionable."""
                 max_tokens=800  # Shorter for preliminary
             )
             
+            # Validate response is a dict
+            if not isinstance(response, dict):
+                raise Exception(f"API returned non-dict response: {type(response)} - {str(response)[:200]}")
+            
+            # Safely extract data
+            content = response.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content else ""
+            
+            usage_data = response.get("usage", {})
+            if not isinstance(usage_data, dict):
+                usage_data = {}
+            tokens_used = usage_data.get("total_tokens", 0) or 0
+            
             return AgentOutput(
                 success=True,
-                content=response["content"],
-                metadata={"preliminary": True, "tokens_used": response["usage"]["total_tokens"]}
+                content=content,
+                metadata={"preliminary": True, "tokens_used": tokens_used}
             )
         except Exception as e:
             logger.error(f"Preliminary diagnosis error: {str(e)}")

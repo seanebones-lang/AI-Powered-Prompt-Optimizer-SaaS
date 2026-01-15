@@ -321,15 +321,28 @@ class GrokAPI:
         """
         additional_system = "Generate a high-quality response based on the user's optimized prompt. Provide an example of what the optimized prompt would produce."
         
-        response = self.generate_completion(
-            prompt=optimized_prompt,
-            system_prompt=additional_system,
-            temperature=0.8,
-            max_tokens=max_tokens,
-            enforce_persona=True
-        )
-        
-        return response.get("content", "") or ""
+        try:
+            response = self.generate_completion(
+                prompt=optimized_prompt,
+                system_prompt=additional_system,
+                temperature=0.8,
+                max_tokens=max_tokens,
+                enforce_persona=True
+            )
+            
+            # Validate response is a dict
+            if not isinstance(response, dict):
+                logger.error(f"generate_optimized_output: response is not a dict: {type(response)}")
+                return ""
+            
+            content = response.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content else ""
+            
+            return content
+        except Exception as e:
+            logger.error(f"Error generating optimized output: {str(e)}")
+            return ""
     
     def _sanitize_persona_content(self, content: str) -> str:
         """
