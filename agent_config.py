@@ -15,22 +15,22 @@ class AgentConfigManager:
     """Manages custom agent configurations for premium users."""
     
     DEFAULT_CONFIG = {
-        "temperature": 0.7,
+        "temperature": 0.2,
         "max_tokens": 2000,
         "deconstructor": {
-            "temperature": 0.5,
+            "temperature": 0.2,
             "max_tokens": 1500
         },
         "diagnoser": {
-            "temperature": 0.6,
+            "temperature": 0.2,
             "max_tokens": 1500
         },
         "designer": {
-            "temperature": 0.8,
+            "temperature": 0.2,
             "max_tokens": 2000
         },
         "evaluator": {
-            "temperature": 0.5,
+            "temperature": 0.2,
             "max_tokens": 1000
         },
         "use_parallel_execution": True,

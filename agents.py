@@ -640,7 +640,7 @@ class OrchestratorAgent:
         }
         self.workflow = AgentWorkflow(self.agents_dict)
     
-    async def optimize_prompt(
+    def optimize_prompt(
         self,
         prompt: str,
         prompt_type: PromptType,
@@ -801,7 +801,7 @@ class OrchestratorAgent:
         
         return results
     
-    async def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """
         Preliminary diagnosis that can run in parallel with deconstruction.
         Provides quick insights without full deconstruction context.
