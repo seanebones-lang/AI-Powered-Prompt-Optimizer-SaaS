@@ -622,12 +622,12 @@ class OrchestratorAgent:
         self.evaluator.default_max_tokens = self.config.get("evaluator", {}).get("max_tokens", 1000)
         
         self.chain_of_thought = ChainOfThoughtAgent()
-        self.chain_of_thought.default_temperature = self.config.get("chain_of_thought", {}).get("temperature", 0.6)
-        self.chain_of_thought.default_max_tokens = self.config.get("chain_of_thought", {}).get("max_tokens", 1500)
+        self.chain_of_thought.default_temperature = self.config.get("chain_of_thought", {}).get("temperature", 0.3)
+        self.chain_of_thought.default_max_tokens = self.config.get("chain_of_thought", {}).get("max_tokens", 4000)
         
         self.tree_of_thought = TreeOfThoughtAgent()
-        self.tree_of_thought.default_temperature = self.config.get("tree_of_thought", {}).get("temperature", 0.7)
-        self.tree_of_thought.default_max_tokens = self.config.get("tree_of_thought", {}).get("max_tokens", 1500)
+        self.tree_of_thought.default_temperature = self.config.get("tree_of_thought", {}).get("temperature", 0.3)
+        self.tree_of_thought.default_max_tokens = self.config.get("tree_of_thought", {}).get("max_tokens", 4000)
         
         # Initialize workflow manager
         self.agents_dict = {

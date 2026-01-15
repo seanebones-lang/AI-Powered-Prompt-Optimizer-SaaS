@@ -33,6 +33,14 @@ class AgentConfigManager:
             "temperature": 0.2,
             "max_tokens": 4000
         },
+        "chain_of_thought": {
+            "temperature": 0.3,
+            "max_tokens": 4000
+        },
+        "tree_of_thought": {
+            "temperature": 0.3,
+            "max_tokens": 4000
+        },
         "use_parallel_execution": True,
         "enable_collections": False
     }
