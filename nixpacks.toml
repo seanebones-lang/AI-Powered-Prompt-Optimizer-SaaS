@@ -8,8 +8,18 @@ cmds = [
 
 [phases.build]
 cmds = [
-    "echo 'Streamlit application configured'"
+    "echo 'Streamlit application configured'",
+    "echo 'Forcing Streamlit detection over FastAPI'"
 ]
 
 [start]
 cmd = "streamlit run main.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false"
+
+[env]
+# Force Streamlit framework detection
+NIXPACKS_PYTHON_FRAMEWORK = "streamlit"
+# Disable FastAPI auto-detection
+UVICORN_APP_MODULE = ""
+# Additional Railway environment variables
+STREAMLIT_APP_TYPE = "streamlit"
+RAILWAY_STATIC_URL = ""

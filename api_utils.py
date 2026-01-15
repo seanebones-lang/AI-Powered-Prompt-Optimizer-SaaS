@@ -47,6 +47,20 @@ class GrokAPI:
             timeout: Request timeout in seconds (default: 60.0)
         """
         self.api_key = settings.xai_api_key
+        
+        # Validate API key format (basic check)
+        if not self.api_key:
+            raise ValueError(
+                "XAI_API_KEY is not set. Please set it in Streamlit secrets or environment variables. "
+                "Get your API key from https://console.x.ai"
+            )
+        
+        if not isinstance(self.api_key, str) or len(self.api_key) < 10:
+            logger.warning(
+                f"API key appears invalid (length: {len(self.api_key) if self.api_key else 0}). "
+                "Please verify your XAI_API_KEY is correct. Get your API key from https://console.x.ai"
+            )
+        
         # API Base URL: https://api.x.ai/v1 (verified correct as of Jan 2026)
         self.base_url = settings.xai_api_base.rstrip('/')
         # Model name: grok-4-1-fast-reasoning (use hyphens, not dots)
@@ -57,7 +71,8 @@ class GrokAPI:
         self.timeout = timeout
         
         # Log configuration for debugging (without exposing API key)
-        logger.info(f"GrokAPI initialized: base_url={self.base_url}, model={self.default_model}")
+        api_key_preview = f"{self.api_key[:4]}***{self.api_key[-2:]}" if len(self.api_key) > 6 else "***"
+        logger.info(f"GrokAPI initialized: base_url={self.base_url}, model={self.default_model}, api_key={api_key_preview}")
     
     @track_performance("grok_api.generate_completion")
     def generate_completion(
@@ -170,15 +185,37 @@ class GrokAPI:
                     if response.status_code != 200:
                         error_text = response.text
                         logger.error(f"API returned status {response.status_code}: {error_text}")
+                        
+                        # Safely extract error message from response
+                        error_msg = error_text
                         try:
                             # Try to parse as JSON first
                             if isinstance(error_text, str) and error_text.strip().startswith('{'):
                                 error_data = response.json()
-                                error_msg = error_data.get("error", {}).get("message", error_text)
-                            else:
-                                error_msg = error_text
-                        except (json.JSONDecodeError, ValueError, KeyError, AttributeError):
+                                # Handle both dict and string responses
+                                if isinstance(error_data, dict):
+                                    # Try nested error.message structure
+                                    if "error" in error_data:
+                                        error_obj = error_data["error"]
+                                        if isinstance(error_obj, dict) and "message" in error_obj:
+                                            error_msg = error_obj["message"]
+                                        elif isinstance(error_obj, str):
+                                            error_msg = error_obj
+                                    # Try direct message field
+                                    elif "message" in error_data:
+                                        error_msg = error_data["message"]
+                                elif isinstance(error_data, str):
+                                    error_msg = error_data
+                        except (json.JSONDecodeError, ValueError, KeyError, AttributeError, TypeError) as e:
+                            # Fallback to raw error text
+                            logger.debug(f"Could not parse error response as JSON: {e}")
                             error_msg = error_text if isinstance(error_text, str) else str(error_text)
+                        
+                        # Provide helpful error message for authentication issues
+                        if response.status_code == 401 or response.status_code == 403:
+                            if "API key" in error_msg or "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                                error_msg = f"{error_msg} Please verify your XAI_API_KEY is set correctly in Streamlit secrets or environment variables."
+                        
                         raise Exception(f"API error ({response.status_code}): {error_msg}")
 
                     # Parse JSON response

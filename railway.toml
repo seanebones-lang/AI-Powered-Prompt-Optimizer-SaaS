@@ -9,11 +9,5 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [env]
-# Force Streamlit application type to prevent FastAPI auto-detection
-STREAMLIT_APP_TYPE = "streamlit"
-# Explicitly disable FastAPI/uvicorn auto-detection
-UVICORN_APP_MODULE = ""
-# Additional Railway detection overrides
-RAILWAY_STATIC_URL = ""
-NIXPACKS_PYTHON_FRAMEWORK = "streamlit"
+# Railway-specific environment variables
 PYTHONUNBUFFERED = "1"
