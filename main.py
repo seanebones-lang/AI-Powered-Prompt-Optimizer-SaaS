@@ -159,170 +159,216 @@ def show_optimize_page():
             "evaluator": {"temperature": eval_temp, "max_tokens": 1000}
         })
     
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Voice input (Premium)
-        if st.session_state.is_premium:
-            use_voice = st.checkbox("🎤 Use Voice Input")
-            if use_voice:
-                audio_file = st.file_uploader("Upload audio", type=['wav', 'mp3', 'm4a', 'ogg'])
-                if audio_file:
-                    with st.spinner("Transcribing audio..."):
-                        try:
-                            voice_prompt = VoicePrompting()
-                            transcribed = voice_prompt.transcribe_audio(audio_file.read())
-                            st.session_state.current_prompt = transcribed
-                            st.success("Audio transcribed!")
-                        except Exception as e:
-                            st.error(f"Transcription failed: {str(e)}")
-        
-        # Prompt input
-        prompt_input = st.text_area(
-            "Prompt to optimize:",
-            value=st.session_state.current_prompt,
-            height=150,
-            placeholder="Enter your prompt here..."
-        )
-        st.session_state.current_prompt = prompt_input
-        
-        col_a, col_b, col_c = st.columns(3)
-        
-        with col_a:
-            prompt_type = st.selectbox("Prompt Type", [pt.value for pt in PromptType])
-        
-        with col_b:
-            thinking_mode = st.selectbox("Thinking Mode", 
-                                        ["4d", "chain_of_thought", "tree_of_thought"])
-        
-        with col_c:
-            if st.button("🚀 Optimize", type="primary", use_container_width=True):
-                if not prompt_input.strip():
-                    st.error("Please enter a prompt")
-                    return
-                
-                with st.spinner("Optimizing..."):
+    # Voice input (Premium)
+    if st.session_state.is_premium:
+        use_voice = st.checkbox("🎤 Use Voice Input")
+        if use_voice:
+            audio_file = st.file_uploader("Upload audio", type=['wav', 'mp3', 'm4a', 'ogg'])
+            if audio_file:
+                with st.spinner("Transcribing audio..."):
                     try:
-                        # Validate
-                        is_valid, sanitized, error = sanitize_and_validate_prompt(prompt_input)
-                        if not is_valid:
-                            st.error(f"Invalid prompt: {error}")
-                            return
-                        
-                        is_valid_type, prompt_type_enum, type_error = validate_prompt_type(prompt_type)
-                        if not is_valid_type:
-                            st.error(f"Invalid type: {type_error}")
-                            return
-                        
-                        # Create progress containers
-                        progress_container = st.empty()
-                        status_container = st.empty()
-                        
-                        # Optimize with progress updates
-                        status_container.info("⏳ Step 1/4: Deconstructing prompt...")
-                        orchestrator = AgentConfigManager.apply_config_to_agent(
-                            None, st.session_state.agent_config
-                        )
-                        
-                        status_container.info("⏳ Step 2/4: Diagnosing issues...")
-                        time.sleep(0.5)  # Brief pause for UX
-                        
-                        result = orchestrator.optimize_prompt(
-                            sanitized, prompt_type_enum, methodology=thinking_mode
-                        )
-                        
-                        status_container.info("⏳ Step 3/4: Designing optimized version...")
-                        time.sleep(0.5)
-                        
-                        status_container.info("⏳ Step 4/4: Evaluating quality...")
-                        time.sleep(0.5)
-                        
-                        st.session_state.optimization_result = result
-                        st.session_state.history.append(result)
-                        
-                        # Clear progress indicators
-                        progress_container.empty()
-                        status_container.empty()
-                        
-                        st.success("✅ Optimization complete!")
-                        
-                        # Show cost info
-                        cost_optimizer = get_cost_optimizer()
-                        recent_cost = cost_optimizer.records[-1] if cost_optimizer.records else None
-                        if recent_cost:
-                            st.info(f"💰 Cost: ${recent_cost.cost_usd:.4f} | Tokens: {recent_cost.total_tokens:,}")
-                        
+                        voice_prompt = VoicePrompting()
+                        transcribed = voice_prompt.transcribe_audio(audio_file.read())
+                        st.session_state.current_prompt = transcribed
+                        st.success("Audio transcribed!")
                     except Exception as e:
-                        logger.error(f"Optimization error: {str(e)}")
-                        if 'progress_container' in locals():
-                            progress_container.empty()
-                        if 'status_container' in locals():
-                            status_container.empty()
-                        st.error(f"❌ Error: {str(e)}")
+                        st.error(f"Transcription failed: {str(e)}")
     
-    with col2:
-        st.subheader("📊 Results")
+    # Prompt input
+    prompt_input = st.text_area(
+        "Prompt to optimize:",
+        value=st.session_state.current_prompt,
+        height=150,
+        placeholder="Enter your prompt here..."
+    )
+    st.session_state.current_prompt = prompt_input
+    
+    col_a, col_b, col_c = st.columns(3)
+    
+    with col_a:
+        prompt_type = st.selectbox("Prompt Type", [pt.value for pt in PromptType])
+    
+    with col_b:
+        thinking_mode = st.selectbox("Thinking Mode", 
+                                    ["4d", "chain_of_thought", "tree_of_thought"])
+    
+    with col_c:
+        if st.button("🚀 Optimize", type="primary", use_container_width=True):
+            if not prompt_input.strip():
+                st.error("Please enter a prompt")
+                return
+            
+            with st.spinner("Optimizing..."):
+                try:
+                    # Validate
+                    is_valid, sanitized, error = sanitize_and_validate_prompt(prompt_input)
+                    if not is_valid:
+                        st.error(f"Invalid prompt: {error}")
+                        return
+                    
+                    is_valid_type, prompt_type_enum, type_error = validate_prompt_type(prompt_type)
+                    if not is_valid_type:
+                        st.error(f"Invalid type: {type_error}")
+                        return
+                    
+                    # Create progress containers
+                    progress_container = st.empty()
+                    status_container = st.empty()
+                    
+                    # Optimize with progress updates
+                    status_container.info("⏳ Step 1/4: Deconstructing prompt...")
+                    orchestrator = AgentConfigManager.apply_config_to_agent(
+                        None, st.session_state.agent_config
+                    )
+                    
+                    status_container.info("⏳ Step 2/4: Diagnosing issues...")
+                    time.sleep(0.5)  # Brief pause for UX
+                    
+                    result = orchestrator.optimize_prompt(
+                        sanitized, prompt_type_enum, methodology=thinking_mode
+                    )
+                    
+                    status_container.info("⏳ Step 3/4: Designing optimized version...")
+                    time.sleep(0.5)
+                    
+                    status_container.info("⏳ Step 4/4: Evaluating quality...")
+                    time.sleep(0.5)
+                    
+                    st.session_state.optimization_result = result
+                    st.session_state.history.append(result)
+                    
+                    # Clear progress indicators
+                    progress_container.empty()
+                    status_container.empty()
+                    
+                    st.success("✅ Optimization complete!")
+                    
+                    # Show cost info
+                    cost_optimizer = get_cost_optimizer()
+                    recent_cost = cost_optimizer.records[-1] if cost_optimizer.records else None
+                    if recent_cost:
+                        st.info(f"💰 Cost: ${recent_cost.cost_usd:.4f} | Tokens: {recent_cost.total_tokens:,}")
+                    
+                except Exception as e:
+                    logger.error(f"Optimization error: {str(e)}")
+                    if 'progress_container' in locals():
+                        progress_container.empty()
+                    if 'status_container' in locals():
+                        status_container.empty()
+                    st.error(f"❌ Error: {str(e)}")
+    
+    # Results section - NOW BELOW THE INPUT
+    st.markdown("---")
+    st.subheader("📊 Results")
+    
+    if st.session_state.optimization_result:
+        result = st.session_state.optimization_result
         
-        if st.session_state.optimization_result:
-            result = st.session_state.optimization_result
-            score = result.get("quality_score", 0)
+        # Check if we have a valid optimized prompt
+        optimized = result.get("optimized_prompt", "")
+        design_output = result.get("design_output", "")
+        
+        # If optimized is empty but we have design_output, use that
+        if not optimized or optimized.strip() == "":
+            if design_output and design_output.strip():
+                optimized = design_output
+            elif result.get("deconstruction"):
+                optimized = result.get("deconstruction", "")
+            else:
+                optimized = "No optimized prompt available yet."
+        
+        # Show errors if any (but don't block display - errors in later phases shouldn't hide the prompt)
+        # Only show errors that are NOT related to sample output or evaluation (those are non-critical)
+        critical_errors = []
+        non_critical_errors = []
+        for error in result.get("errors", []):
+            error_lower = str(error).lower()
+            if any(term in error_lower for term in ["sample output", "evaluation", "evaluator"]):
+                non_critical_errors.append(error)
+            else:
+                critical_errors.append(error)
+        
+        if critical_errors:
+            error_count = len(critical_errors)
+            with st.expander(f"⚠️ {error_count} error(s) during optimization", expanded=False):
+                for error in critical_errors:
+                    st.error(f"• {error}")
+        
+        if non_critical_errors:
+            # These are just warnings - optimization succeeded but some optional steps failed
+            pass  # Don't show these prominently
+        
+        score = result.get("quality_score", 0)
+        if score:
             st.metric("Quality Score", f"{score}/100")
-            
-            tab1, tab2, tab3, tab4 = st.tabs(["Optimized", "Analysis", "Sample", "Details"])
-            
-            with tab1:
-                st.markdown("### Optimized Prompt")
-                optimized = result.get("optimized_prompt", "")
-                if not optimized or optimized.strip() == "":
-                    # Fallback: try to get from design_output or show error
-                    optimized = result.get("design_output", "No optimized prompt available. Check errors below.")
-                    if result.get("errors"):
-                        st.warning("⚠️ Optimization encountered errors. Showing raw design output:")
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["✨ Optimized Prompt", "🔍 Analysis", "📝 Sample Output", "⚙️ Details"])
+        
+        with tab1:
+            st.markdown("### ✨ Your Optimized Prompt")
+            if optimized and optimized.strip():
                 st.code(optimized, language="text")
                 
-                # Show extraction info if available
-                if result.get("design_output") and result.get("design_output") != optimized:
-                    with st.expander("🔍 View Full Design Output"):
-                        st.text(result.get("design_output"))
+                # Copy button
+                st.markdown("---")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("📋 Copy to Clipboard", use_container_width=True):
+                        st.code(optimized, language="text")
+                        st.success("Copied! (Use Cmd/Ctrl+C)")
+                with col2:
+                    if st.button("💾 Save to History", use_container_width=True):
+                        st.info("Saved!")
+            else:
+                st.info("No optimized prompt available. The optimization may have encountered errors.")
             
-            with tab2:
-                st.markdown("### Deconstruction")
-                st.write(result.get("deconstruction", ""))
-                st.markdown("### Diagnosis")
-                st.write(result.get("diagnosis", ""))
-                st.markdown("### Evaluation")
-                st.write(result.get("evaluation", ""))
+            # Show full design output if different from extracted
+            if design_output and design_output != optimized and len(design_output) > len(optimized):
+                with st.expander("🔍 View Full Design Output"):
+                    st.text(design_output)
             
-            with tab3:
-                st.markdown("### Sample Output")
-                st.write(result.get("sample_output", ""))
+        with tab2:
+            st.markdown("### 🔍 Analysis")
             
-            with tab4:
-                st.json({
-                    "tokens_used": result.get("tokens_used"),
-                    "processing_time": result.get("processing_time"),
-                    "prompt_type": result.get("prompt_type"),
-                    "workflow_mode": result.get("workflow_mode")
-                })
+            if result.get("deconstruction"):
+                with st.expander("📋 Deconstruction", expanded=True):
+                    st.write(result.get("deconstruction", ""))
             
-            # Actions
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button("💾 Save"):
-                    st.info("Saved to history!")
-            with col2:
-                if st.button("📋 Copy"):
-                    st.success("Copied!")
-            with col3:
-                export_data = export_results(result, "json")
-                st.download_button(
-                    "📤 Export",
-                    data=export_data,
-                    file_name=f"prompt_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-        else:
-            st.info("Enter a prompt and click 'Optimize'")
+            if result.get("diagnosis"):
+                with st.expander("🔬 Diagnosis", expanded=False):
+                    st.write(result.get("diagnosis", ""))
+            
+            if result.get("evaluation"):
+                with st.expander("⭐ Evaluation", expanded=False):
+                    st.write(result.get("evaluation", ""))
+            
+            if not any([result.get("deconstruction"), result.get("diagnosis"), result.get("evaluation")]):
+                st.info("Analysis data will appear here after optimization.")
+        
+        with tab3:
+            st.markdown("### 📝 Sample Output")
+            sample = result.get("sample_output", "")
+            if sample and sample.strip() and "failed" not in sample.lower():
+                st.write(sample)
+            else:
+                st.info("Sample output will appear here after optimization.")
+        
+        with tab4:
+            st.markdown("### ⚙️ Technical Details")
+            st.json({
+                "prompt_type": result.get("prompt_type"),
+                "workflow_mode": result.get("workflow_mode"),
+                "quality_score": result.get("quality_score"),
+                "has_errors": len(result.get("errors", [])) > 0,
+                "error_count": len(result.get("errors", []))
+            })
+            
+            if result.get("errors"):
+                st.markdown("#### Errors/Warnings")
+                for error in result.get("errors", []):
+                    st.warning(f"• {error}")
+    else:
+        st.info("👆 Enter a prompt above and click '🚀 Optimize' to see results here.")
 
 def show_batch_page():
     """Batch optimization page."""
