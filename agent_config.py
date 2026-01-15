@@ -16,22 +16,22 @@ class AgentConfigManager:
     
     DEFAULT_CONFIG = {
         "temperature": 0.2,
-        "max_tokens": 2000,
+        "max_tokens": 4000,
         "deconstructor": {
             "temperature": 0.2,
-            "max_tokens": 1500
+            "max_tokens": 4000
         },
         "diagnoser": {
             "temperature": 0.2,
-            "max_tokens": 1500
+            "max_tokens": 4000
         },
         "designer": {
             "temperature": 0.2,
-            "max_tokens": 2000
+            "max_tokens": 4000
         },
         "evaluator": {
             "temperature": 0.2,
-            "max_tokens": 1000
+            "max_tokens": 4000
         },
         "use_parallel_execution": True,
         "enable_collections": False
