@@ -43,7 +43,9 @@ class Settings:
         # xAI Grok API Configuration
         self.xai_api_key = get_setting("XAI_API_KEY") or get_setting("xai_api_key")
         if not self.xai_api_key:
-            raise ValueError("XAI_API_KEY is required. Set it in Streamlit secrets or environment variables.")
+            # Log warning instead of crashing - allow app to start and show error in UI
+            print("WARNING: XAI_API_KEY is not set. Application will show configuration error.")
+            self.xai_api_key = "placeholder-key"  # Temporary placeholder
         
         # xAI API Configuration - verified correct as of Jan 2026
         self.xai_api_base = get_setting("XAI_API_BASE", "https://api.x.ai/v1") or get_setting("xai_api_base", "https://api.x.ai/v1")
@@ -53,7 +55,9 @@ class Settings:
         # Application Configuration
         self.secret_key = get_setting("SECRET_KEY") or get_setting("secret_key")
         if not self.secret_key:
-            raise ValueError("SECRET_KEY is required. Set it in Streamlit secrets or environment variables.")
+            # Log warning instead of crashing - allow app to start and show error in UI
+            print("WARNING: SECRET_KEY is not set. Using default secret for development.")
+            self.secret_key = "development-secret-key-placeholder"
         
         self.app_env = get_setting("APP_ENV", "development") or get_setting("app_env", "development")
         

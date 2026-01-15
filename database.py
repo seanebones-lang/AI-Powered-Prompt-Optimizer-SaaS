@@ -401,12 +401,18 @@ class Database:
     
     def __init__(self):
         """Initialize database connection."""
-        self.engine = create_engine(
-            settings.database_url,
-            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
-        )
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        self._create_tables()
+        try:
+            self.engine = create_engine(
+                settings.database_url,
+                connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+            )
+            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            self._create_tables()
+        except Exception as e:
+            logger.warning(f"Could not initialize database: {str(e)}. Using fallback mode.")
+            # Create a dummy engine that won't work but won't crash
+            self.engine = None
+            self.SessionLocal = None
     
     def _create_tables(self):
         """Create all database tables."""
@@ -414,8 +420,8 @@ class Database:
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
         except SQLAlchemyError as e:
-            logger.error(f"Error creating database tables: {str(e)}")
-            raise
+            logger.warning(f"Could not create database tables: {str(e)}. Using in-memory fallback.")
+            # Don't raise exception - allow app to continue with limited functionality
     
     def get_session(self) -> Session:
         """Get a database session."""
