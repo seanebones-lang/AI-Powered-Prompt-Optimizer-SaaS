@@ -2,11 +2,15 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "streamlit run main.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
-healthcheckPath = "/"
+startCommand = "streamlit run main.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false"
+healthcheckPath = "/_stcore/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [env]
+# Force Streamlit application type to prevent FastAPI auto-detection
+STREAMLIT_APP_TYPE = "streamlit"
+# Explicitly disable FastAPI/uvicorn auto-detection
+UVICORN_APP_MODULE = ""
 PYTHONUNBUFFERED = "1"
