@@ -598,14 +598,36 @@ class OrchestratorAgent:
     Enhanced with dynamic workflow routing, parallel execution, and retry logic.
     """
     
-    def __init__(self):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        from agent_config import AgentConfigManager
+        self.config = config or AgentConfigManager.DEFAULT_CONFIG
+        
         self.name = "Orchestrator"
+        
+        # Initialize agents with config
         self.deconstructor = DeconstructorAgent()
+        self.deconstructor.default_temperature = self.config.get("deconstructor", {}).get("temperature", 0.5)
+        self.deconstructor.default_max_tokens = self.config.get("deconstructor", {}).get("max_tokens", 1500)
+        
         self.diagnoser = DiagnoserAgent()
+        self.diagnoser.default_temperature = self.config.get("diagnoser", {}).get("temperature", 0.4)
+        self.diagnoser.default_max_tokens = self.config.get("diagnoser", {}).get("max_tokens", 1500)
+        
         self.designer = DesignerAgent()
+        self.designer.default_temperature = self.config.get("designer", {}).get("temperature", 0.8)
+        self.designer.default_max_tokens = self.config.get("designer", {}).get("max_tokens", 2000)
+        
         self.evaluator = EvaluatorAgent()
+        self.evaluator.default_temperature = self.config.get("evaluator", {}).get("temperature", 0.3)
+        self.evaluator.default_max_tokens = self.config.get("evaluator", {}).get("max_tokens", 1000)
+        
         self.chain_of_thought = ChainOfThoughtAgent()
+        self.chain_of_thought.default_temperature = self.config.get("chain_of_thought", {}).get("temperature", 0.6)
+        self.chain_of_thought.default_max_tokens = self.config.get("chain_of_thought", {}).get("max_tokens", 1500)
+        
         self.tree_of_thought = TreeOfThoughtAgent()
+        self.tree_of_thought.default_temperature = self.config.get("tree_of_thought", {}).get("temperature", 0.7)
+        self.tree_of_thought.default_max_tokens = self.config.get("tree_of_thought", {}).get("max_tokens", 1500)
         
         # Initialize workflow manager
         self.agents_dict = {
@@ -617,16 +639,7 @@ class OrchestratorAgent:
             'tree_of_thought': self.tree_of_thought
         }
         self.workflow = AgentWorkflow(self.agents_dict)
-    
-    async def handle_identity_query(self, query: str) -> Optional[str]:
-        """
-        Handle identity-related queries specifically.
-        Detects if the query is asking about the AI's identity and responds in-character.
-        
-        Args:
-            query: User query
-        
-        Returns:
+
             Response if identity-related, None otherwise
         """
         return grok_api.handle_identity_query(query)
