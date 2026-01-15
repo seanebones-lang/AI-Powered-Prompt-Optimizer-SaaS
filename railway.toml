@@ -13,4 +13,7 @@ restartPolicyMaxRetries = 3
 STREAMLIT_APP_TYPE = "streamlit"
 # Explicitly disable FastAPI/uvicorn auto-detection
 UVICORN_APP_MODULE = ""
+# Additional Railway detection overrides
+RAILWAY_STATIC_URL = ""
+NIXPACKS_PYTHON_FRAMEWORK = "streamlit"
 PYTHONUNBUFFERED = "1"
