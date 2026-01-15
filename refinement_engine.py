@@ -14,7 +14,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
-import api_utils as grok_api
+from api_utils import generate_completion
 from agents import OrchestratorAgent, PromptType
 from database import db
 
@@ -226,7 +226,7 @@ Your job is to take an existing optimized prompt and refine it based on specific
 Make surgical, targeted improvements while preserving what works well.
 Output only the refined prompt without explanations or meta-commentary."""
             
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=refinement_prompt,
                 system_prompt=system_prompt,
                 temperature=0.5,  # Balanced for refinement
@@ -259,7 +259,7 @@ USER FEEDBACK THAT GUIDED CHANGES:
 Provide a concise summary (2-3 sentences) of the main changes made and how they address the feedback."""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=analysis_prompt,
                 system_prompt="You are a prompt analysis expert. Provide clear, concise change summaries.",
                 temperature=0.3,
@@ -300,7 +300,7 @@ Rate the refinement on a scale of 0-100 based on:
 Respond with ONLY a number between 0 and 100."""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=evaluation_prompt,
                 system_prompt="You are an objective prompt quality evaluator. Respond with only a number.",
                 temperature=0.2,
@@ -336,7 +336,7 @@ FEEDBACK ADDRESSED:
 In 2-3 sentences, explain how the refined version improves upon the previous one."""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=comparison_prompt,
                 system_prompt="You are a concise technical writer. Highlight key improvements.",
                 temperature=0.3,
@@ -386,7 +386,7 @@ Format as JSON array:
 ]"""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=suggestion_prompt,
                 system_prompt="You are a prompt optimization expert. Provide actionable suggestions.",
                 temperature=0.4,

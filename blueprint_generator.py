@@ -18,7 +18,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 from datetime import datetime
-import api_utils as grok_api
+from api_utils import generate_completion
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +274,7 @@ The system prompt should include:
 Make it professional, comprehensive, and production-ready. The agent should identify as "NextEleven AI - [Agent Name]"."""
 
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=prompt,
                 system_prompt="You are an expert AI architect specializing in agent system design.",
                 temperature=0.4,

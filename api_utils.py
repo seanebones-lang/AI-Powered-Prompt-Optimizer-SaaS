@@ -362,5 +362,30 @@ class GrokAPI:
         
         return None
 
+
+# Synchronous wrapper functions for convenience
+def generate_completion(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2000,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Synchronous wrapper for generate_completion.
+    
+    This function wraps the async generate_completion method and runs it synchronously.
+    Use this for non-async code that needs to call the API.
+    """
+    api = GrokAPI()
+    return asyncio.run(api.generate_completion(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        **kwargs
+    ))
+
+
 # Global API instance
 grok_api = GrokAPI(timeout=60.0)

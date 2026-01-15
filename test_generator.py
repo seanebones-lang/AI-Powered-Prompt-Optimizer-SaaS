@@ -16,7 +16,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 import json
-import api_utils as grok_api
+from api_utils import generate_completion
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -148,7 +148,7 @@ Format as JSON array:
 ]"""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=generation_prompt,
                 system_prompt="You are a QA engineer creating comprehensive test cases.",
                 temperature=0.4,
@@ -216,7 +216,7 @@ Edge cases to consider:
 Format as JSON array with name, input, expected_output, success_criteria."""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=generation_prompt,
                 system_prompt="You are a QA engineer specializing in edge case testing.",
                 temperature=0.5,
@@ -607,7 +607,7 @@ PASS/FAIL
 Explanation here."""
         
         try:
-            response = grok_api.generate_completion(
+            response = generate_completion(
                 prompt=evaluation_prompt,
                 system_prompt="You are an objective test evaluator. Be strict but fair.",
                 temperature=0.2,
