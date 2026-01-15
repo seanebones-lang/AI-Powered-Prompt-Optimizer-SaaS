@@ -18,6 +18,7 @@ from api_utils import grok_api
 from collections_utils import enable_collections_for_agent, is_collections_enabled
 from config import settings
 from agentic_rag import retrieve_prompt_examples, is_agentic_rag_enabled
+from cache_utils import get_cached_response, cache_response
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +97,10 @@ class StructuredOutputParser:
 
 class PromptType(str, Enum):
     """Supported prompt types."""
-    CREATIVE = "creative"
-    TECHNICAL = "technical"
-    ANALYTICAL = "analytical"
-    EDUCATIONAL = "educational"
-    MARKETING = "marketing"
+    BUILD_AGENT = "build_agent"
+    REQUEST_BUILD = "request_build"
+    DEPLOYMENT_OPTIONS = "deployment_options"
+    SYSTEM_IMPROVEMENT = "system_improvement"
 
 
 class AgentOutput(BaseModel):
@@ -124,7 +124,7 @@ class BaseAgent:
     default_temperature: float = 0.5
     default_max_tokens: int = 1500
 
-    def _call_api(
+    async def _call_api(
         self,
         user_prompt: str,
         system_prompt: str,
@@ -132,6 +132,17 @@ class BaseAgent:
         max_tokens: Optional[int] = None,
         tools: Optional[List[Dict]] = None
     ) -> AgentOutput:
+        # Check cache before making API call
+        cache_key = f"{self.name}:{user_prompt}:{system_prompt}"
+        cached_response = get_cached_response(cache_key, self.name)
+        if cached_response:
+            return AgentOutput(
+                success=cached_response['success'],
+                content=cached_response['content'],
+                metadata=cached_response['metadata'],
+                errors=cached_response.get('errors', [])
+            )
+
         """
         Common API call method with error handling and metrics.
 
@@ -158,7 +169,7 @@ class BaseAgent:
             execution_time_ms = (time.time() - start_time) * 1000
             tokens_used = response["usage"]["total_tokens"]
 
-            return AgentOutput(
+            output = AgentOutput(
                 success=True,
                 content=response["content"],
                 metadata={
@@ -168,6 +179,14 @@ class BaseAgent:
                     "execution_time_ms": round(execution_time_ms, 2)
                 }
             )
+            # Cache the successful response
+            cache_response(cache_key, self.name, {
+                'success': output.success,
+                'content': output.content,
+                'metadata': output.metadata,
+                'errors': output.errors
+            })
+            return output
         except Exception as e:
             execution_time_ms = (time.time() - start_time) * 1000
             logger.error(f"{self.name} error: {str(e)}")
@@ -184,11 +203,10 @@ class BaseAgent:
     def _get_prompt_type_context(self, prompt_type: PromptType) -> str:
         """Get type-specific context for prompts."""
         contexts = {
-            PromptType.CREATIVE: "Focus on creativity, emotional resonance, and narrative flow.",
-            PromptType.TECHNICAL: "Focus on precision, accuracy, and technical correctness.",
-            PromptType.ANALYTICAL: "Focus on logical structure, data interpretation, and insights.",
-            PromptType.EDUCATIONAL: "Focus on clarity, comprehension, and learning outcomes.",
-            PromptType.MARKETING: "Focus on persuasion, engagement, and conversion."
+            PromptType.BUILD_AGENT: "Focus on creating intelligent agents tailored to specific tasks.",
+            PromptType.REQUEST_BUILD: "Focus on requesting builds or implementations for specific functionalities.",
+            PromptType.DEPLOYMENT_OPTIONS: "Focus on identifying the best deployment strategies and options.",
+            PromptType.SYSTEM_IMPROVEMENT: "Focus on generating ideas to enhance and improve the system."
         }
         return contexts.get(prompt_type, "")
 
@@ -200,7 +218,7 @@ class DeconstructorAgent(BaseAgent):
     role = "Break down vague or unstructured prompts into clear, analyzable components"
     default_temperature = 0.5
 
-    def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Deconstruct a prompt into components."""
         system_prompt = f"""As NextEleven AI's Deconstructor specialist, your role is to break down vague or unstructured prompts into clear, analyzable components.
 
@@ -227,7 +245,7 @@ class DiagnoserAgent(BaseAgent):
     role = "Identify weaknesses, ambiguities, and potential issues in prompts"
     default_temperature = 0.4
 
-    def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
+    async def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
         """Diagnose issues in a prompt."""
         system_prompt = f"""As NextEleven AI's Diagnoser specialist, your role is to identify weaknesses and issues in prompts.
 
@@ -260,7 +278,7 @@ class DesignerAgent(BaseAgent):
     default_temperature = 0.6
     default_max_tokens = 2000
 
-    def process(
+    async def process(
         self,
         prompt: str,
         deconstruction: str,
@@ -336,7 +354,7 @@ class EvaluatorAgent(BaseAgent):
     role = "Evaluate prompt quality and provide scores"
     default_temperature = 0.3
 
-    def process(
+    async def process(
         self,
         original_prompt: str,
         optimized_prompt: str,
@@ -513,9 +531,49 @@ class AgentWorkflow:
             True if parallel execution should be used
         """
         # Use parallel for complex prompt types or long prompts
-        parallel_types = [PromptType.CREATIVE, PromptType.TECHNICAL, PromptType.ANALYTICAL]
+        parallel_types = [PromptType.BUILD_AGENT, PromptType.REQUEST_BUILD]
         return prompt_type in parallel_types or prompt_length > 500
 
+
+class ChainOfThoughtAgent(BaseAgent):
+    """Agent responsible for guiding through a chain of thought process."""
+    
+    name = "ChainOfThought"
+    role = "Guide the user through a step-by-step reasoning process"
+    default_temperature = 0.6
+    
+    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+        """Process a prompt with chain of thought reasoning."""
+        system_prompt = f"""As NextEleven AI's Chain of Thought specialist, your role is to guide the user through a step-by-step reasoning process to solve complex problems.
+
+Focus on breaking down the problem into logical steps, explaining each step clearly.
+{self._get_prompt_type_context(prompt_type)}
+
+Provide a structured reasoning process in a clear, organized format."""
+        
+        user_prompt = f"Guide me through solving this problem with a chain of thought approach:\n\n{prompt}"
+        
+        return await self._call_api(user_prompt, system_prompt)
+
+class TreeOfThoughtAgent(BaseAgent):
+    """Agent responsible for exploring multiple reasoning paths."""
+    
+    name = "TreeOfThought"
+    role = "Explore multiple reasoning paths to find the best solution"
+    default_temperature = 0.7
+    
+    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+        """Process a prompt with tree of thought reasoning."""
+        system_prompt = f"""As NextEleven AI's Tree of Thought specialist, your role is to explore multiple reasoning paths to find the best solution to complex problems.
+
+Focus on generating different approaches or hypotheses, evaluating their pros and cons.
+{self._get_prompt_type_context(prompt_type)}
+
+Provide a comprehensive analysis of different thought paths in a clear, organized format."""
+        
+        user_prompt = f"Explore different solutions to this problem using a tree of thought approach:\n\n{prompt}"
+        
+        return await self._call_api(user_prompt, system_prompt)
 
 class OrchestratorAgent:
     """
@@ -530,17 +588,21 @@ class OrchestratorAgent:
         self.diagnoser = DiagnoserAgent()
         self.designer = DesignerAgent()
         self.evaluator = EvaluatorAgent()
+        self.chain_of_thought = ChainOfThoughtAgent()
+        self.tree_of_thought = TreeOfThoughtAgent()
         
         # Initialize workflow manager
         self.agents_dict = {
             'deconstructor': self.deconstructor,
             'diagnoser': self.diagnoser,
             'designer': self.designer,
-            'evaluator': self.evaluator
+            'evaluator': self.evaluator,
+            'chain_of_thought': self.chain_of_thought,
+            'tree_of_thought': self.tree_of_thought
         }
         self.workflow = AgentWorkflow(self.agents_dict)
     
-    def handle_identity_query(self, query: str) -> Optional[str]:
+    async def handle_identity_query(self, query: str) -> Optional[str]:
         """
         Handle identity-related queries specifically.
         Detects if the query is asking about the AI's identity and responds in-character.
@@ -553,11 +615,12 @@ class OrchestratorAgent:
         """
         return grok_api.handle_identity_query(query)
     
-    def optimize_prompt(
+    async def optimize_prompt(
         self,
         prompt: str,
         prompt_type: PromptType,
-        use_parallel: Optional[bool] = None
+        use_parallel: Optional[bool] = None,
+        methodology: str = "4D"
     ) -> Dict[str, Any]:
         """
         Orchestrate the full 4-D optimization workflow with dynamic routing.
@@ -592,7 +655,7 @@ class OrchestratorAgent:
             logger.info(f"Using {results['workflow_mode']} workflow mode for {prompt_type.value} prompt")
             
             # Phase 1: Deconstruct and Diagnose (can be parallel for complex prompts)
-            if use_parallel and prompt_type in [PromptType.CREATIVE, PromptType.TECHNICAL, PromptType.ANALYTICAL]:
+            if use_parallel and prompt_type in [PromptType.BUILD_AGENT, PromptType.REQUEST_BUILD]:
                 logger.info("Running deconstruction and diagnosis in parallel...")
                 parallel_results = self.workflow.run_parallel([
                     {
@@ -713,7 +776,7 @@ class OrchestratorAgent:
         
         return results
     
-    def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    async def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """
         Preliminary diagnosis that can run in parallel with deconstruction.
         Provides quick insights without full deconstruction context.

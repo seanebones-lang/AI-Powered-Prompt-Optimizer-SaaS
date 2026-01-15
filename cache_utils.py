@@ -1,151 +1,67 @@
 """
-Caching utilities for API responses and optimization results.
-Reduces API calls and improves performance.
+Utility functions for caching agent responses to improve performance.
 """
-import logging
-import hashlib
 import json
-from typing import Optional, Any, Dict
-from functools import wraps
+import os
+from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 
-logger = logging.getLogger(__name__)
+# Cache directory
+CACHE_DIR = ".cache"
+AGENT_CACHE_FILE = os.path.join(CACHE_DIR, "agent_responses.json")
+CACHE_EXPIRY_DAYS = 7
 
 
-class Cache:
-    """Simple in-memory cache with TTL support."""
-    
-    def __init__(self, default_ttl: int = 3600):
-        """
-        Initialize cache.
-        
-        Args:
-            default_ttl: Default time-to-live in seconds (default: 1 hour)
-        """
-        self._cache: Dict[str, Dict[str, Any]] = {}
-        self.default_ttl = default_ttl
-    
-    def _generate_key(self, *args, **kwargs) -> str:
-        """Generate cache key from arguments."""
-        key_data = json.dumps({"args": args, "kwargs": kwargs}, sort_keys=True)
-        return hashlib.sha256(key_data.encode()).hexdigest()
-    
-    def get(self, key: str) -> Optional[Any]:
-        """
-        Get value from cache.
-        
-        Args:
-            key: Cache key
-            
-        Returns:
-            Cached value or None if not found/expired
-        """
-        if key not in self._cache:
-            return None
-        
-        entry = self._cache[key]
-        
-        # Check if expired
-        if datetime.now() > entry["expires_at"]:
-            del self._cache[key]
-            return None
-        
-        return entry["value"]
-    
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """
-        Set value in cache.
-        
-        Args:
-            key: Cache key
-            value: Value to cache
-            ttl: Time-to-live in seconds (uses default if None)
-        """
-        ttl = ttl or self.default_ttl
-        expires_at = datetime.now() + timedelta(seconds=ttl)
-        
-        self._cache[key] = {
-            "value": value,
-            "expires_at": expires_at,
-            "created_at": datetime.now()
-        }
-    
-    def delete(self, key: str) -> None:
-        """Delete key from cache."""
-        if key in self._cache:
-            del self._cache[key]
-    
-    def clear(self) -> None:
-        """Clear all cache entries."""
-        self._cache.clear()
-    
-    def cleanup_expired(self) -> int:
-        """
-        Remove expired entries.
-        
-        Returns:
-            Number of entries removed
-        """
-        now = datetime.now()
-        expired_keys = [
-            key for key, entry in self._cache.items()
-            if now > entry["expires_at"]
-        ]
-        
-        for key in expired_keys:
-            del self._cache[key]
-        
-        return len(expired_keys)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        self.cleanup_expired()
-        return {
-            "total_entries": len(self._cache),
-            "default_ttl": self.default_ttl
-        }
+def ensure_cache_dir():
+    """Ensure the cache directory exists."""
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
 
 
-# Global cache instance
-_global_cache = Cache(default_ttl=3600)
+def load_agent_cache() -> Dict[str, Any]:
+    """Load the agent response cache from file."""
+    ensure_cache_dir()
+    try:
+        if os.path.exists(AGENT_CACHE_FILE):
+            with open(AGENT_CACHE_FILE, 'r') as f:
+                cache = json.load(f)
+                # Remove expired entries
+                expiry_date = datetime.now() - timedelta(days=CACHE_EXPIRY_DAYS)
+                cache = {k: v for k, v in cache.items() if datetime.fromisoformat(v['timestamp']) > expiry_date}
+                return cache
+    except Exception as e:
+        print(f"Error loading cache: {e}")
+    return {}
 
 
-def cached(ttl: int = 3600, key_func: Optional[callable] = None):
-    """
-    Decorator for caching function results.
-    
-    Args:
-        ttl: Time-to-live in seconds
-        key_func: Optional function to generate cache key from arguments
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Generate cache key
-            if key_func:
-                cache_key = key_func(*args, **kwargs)
-            else:
-                cache_key = _global_cache._generate_key(
-                    func.__name__, *args, **kwargs
-                )
-            
-            # Try to get from cache
-            cached_value = _global_cache.get(cache_key)
-            if cached_value is not None:
-                logger.debug(f"Cache hit for {func.__name__}")
-                return cached_value
-            
-            # Call function and cache result
-            result = func(*args, **kwargs)
-            _global_cache.set(cache_key, result, ttl)
-            logger.debug(f"Cached result for {func.__name__}")
-            
-            return result
-        
-        return wrapper
-    return decorator
+def save_agent_cache(cache: Dict[str, Any]):
+    """Save the agent response cache to file."""
+    ensure_cache_dir()
+    try:
+        with open(AGENT_CACHE_FILE, 'w') as f:
+            json.dump(cache, f)
+    except Exception as e:
+        print(f"Error saving cache: {e}")
 
 
-def get_cache() -> Cache:
-    """Get global cache instance."""
-    return _global_cache
+def get_cached_response(prompt: str, agent_name: str) -> Optional[Dict[str, Any]]:
+    """Get a cached response for a given prompt and agent if it exists and is not expired."""
+    cache = load_agent_cache()
+    cache_key = f"{agent_name}:{prompt}"
+    if cache_key in cache:
+        entry = cache[cache_key]
+        expiry_date = datetime.now() - timedelta(days=CACHE_EXPIRY_DAYS)
+        if datetime.fromisoformat(entry['timestamp']) > expiry_date:
+            return entry['response']
+    return None
+
+
+def cache_response(prompt: str, agent_name: str, response: Dict[str, Any]):
+    """Cache a response for a given prompt and agent."""
+    cache = load_agent_cache()
+    cache_key = f"{agent_name}:{prompt}"
+    cache[cache_key] = {
+        'timestamp': datetime.now().isoformat(),
+        'response': response
+    }
+    save_agent_cache(cache)

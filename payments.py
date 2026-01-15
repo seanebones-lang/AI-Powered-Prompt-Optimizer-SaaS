@@ -327,18 +327,8 @@ def get_tier_for_user(user) -> PricingTier:
     Returns:
         PricingTier enum value
     """
-    if not user:
-        return PricingTier.FREE
-
-    # Check if user has active premium subscription
-    if user.is_premium:
-        if user.subscription_expires_at:
-            if user.subscription_expires_at > datetime.utcnow():
-                # Determine tier based on some attribute (simplified)
-                # In production, store tier in database
-                return PricingTier.PRO
-
-    return PricingTier.FREE
+    # For personal use, always return ENTERPRISE tier to access all features
+    return PricingTier.ENTERPRISE
 
 
 def get_daily_limit_for_tier(tier: PricingTier) -> int:

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class BatchOptimizer:
     """Handles batch optimization of multiple prompts."""
     
-    def __init__(self, max_workers: int = 5):
+    def __init__(self, max_workers: int = 10):
         """
         Initialize batch optimizer.
         
@@ -26,11 +26,12 @@ class BatchOptimizer:
         self.max_workers = max_workers
         self.orchestrator = OrchestratorAgent()
     
-    def optimize_batch(
+    async def optimize_batch(
         self,
         prompts: List[Dict[str, Any]],
         user_id: Optional[int] = None,
-        job_id: Optional[int] = None
+        job_id: Optional[int] = None,
+        progress_callback: Optional[Callable[[int, int, int], None]] = None
     ) -> List[Dict[str, Any]]:
         """
         Optimize a batch of prompts.
@@ -47,7 +48,7 @@ class BatchOptimizer:
         completed = 0
         failed = 0
         
-        def optimize_single(prompt_data: Dict[str, Any]) -> Dict[str, Any]:
+        async def optimize_single(prompt_data: Dict[str, Any]) -> Dict[str, Any]:
             """Optimize a single prompt."""
             try:
                 prompt_text = prompt_data.get("prompt", "")
@@ -72,7 +73,7 @@ class BatchOptimizer:
                 
                 # Optimize
                 start_time = time.time()
-                result = self.orchestrator.optimize_prompt(sanitized_prompt, prompt_type_enum)
+                result = await self.orchestrator.optimize_prompt(sanitized_prompt, prompt_type_enum)
                 processing_time = time.time() - start_time
                 
                 result["processing_time"] = processing_time
@@ -89,46 +90,46 @@ class BatchOptimizer:
                     "original_prompt": prompt_data.get("prompt", "")
                 }
         
-        # Process prompts with thread pool
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_prompt = {
-                executor.submit(optimize_single, prompt): prompt
-                for prompt in prompts
-            }
-            
-            for future in as_completed(future_to_prompt):
-                try:
-                    result = future.result()
-                    results.append(result)
-                    
-                    if result.get("success"):
-                        completed += 1
-                    else:
-                        failed += 1
-                    
-                    # Update job progress if job_id provided
-                    if job_id:
-                        db.update_batch_job(
-                            job_id,
-                            completed_prompts=completed,
-                            failed_prompts=failed
-                        )
-                except Exception as e:
-                    logger.error(f"Error processing batch item: {str(e)}")
+        # Process prompts asynchronously
+        import asyncio
+        tasks = [optimize_single(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Error processing batch item: {str(result)}")
+                failed += 1
+                results.append({
+                    "success": False,
+                    "error": str(result),
+                    "original_prompt": ""
+                })
+            else:
+                results.append(result)
+                if result.get("success"):
+                    completed += 1
+                else:
                     failed += 1
-                    results.append({
-                        "success": False,
-                        "error": str(e),
-                        "original_prompt": future_to_prompt[future].get("prompt", "")
-                    })
+            
+            # Update job progress if job_id provided
+            if job_id:
+                db.update_batch_job(
+                    job_id,
+                    completed_prompts=completed,
+                    failed_prompts=failed
+                )
+            # Call progress callback if provided
+            if progress_callback:
+                progress_callback(len(prompts), completed, failed)
         
         return results
     
-    def create_and_process_batch(
+    async def create_and_process_batch(
         self,
         prompts: List[Dict[str, Any]],
         user_id: Optional[int] = None,
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, int], None]] = None
     ) -> Optional[BatchJob]:
         """
         Create a batch job and process it.
@@ -154,7 +155,7 @@ class BatchOptimizer:
             db.update_batch_job(job.id, status="processing")
             
             # Process batch
-            results = self.optimize_batch(prompts, user_id, job.id)
+            results = await self.optimize_batch(prompts, user_id, job.id, progress_callback)
             
             # Save results
             results_json = json.dumps(results)

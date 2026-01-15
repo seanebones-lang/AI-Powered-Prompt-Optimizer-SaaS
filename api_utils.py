@@ -10,6 +10,8 @@ import hashlib
 from typing import Dict, List, Optional, Any
 from config import settings
 from performance import HTTPConnectionPool, track_performance
+import aiohttp
+import asyncio
 from cache_utils import get_cache
 from monitoring import get_metrics
 from observability import get_tracker
@@ -44,11 +46,12 @@ class GrokAPI:
         """
         self.api_key = settings.xai_api_key
         self.base_url = settings.xai_api_base.rstrip('/')
-        self.model = settings.xai_model
+        self.default_model = settings.xai_model
+        self.light_model = getattr(settings, 'xai_light_model', self.default_model)  # Fallback to default if not set
         self.timeout = timeout
     
     @track_performance("grok_api.generate_completion")
-    def generate_completion(
+    async def generate_completion(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
@@ -117,7 +120,7 @@ class GrokAPI:
             messages.append({"role": "user", "content": prompt})
             
             payload = {
-                "model": self.model,
+                "model": self.light_model if max_tokens < 1000 else self.default_model,
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -142,29 +145,28 @@ class GrokAPI:
             metrics = get_metrics()
             llm_call_context = None
             with metrics.time_block("api_request"):
-                client = HTTPConnectionPool.get_client(self.base_url, self.timeout)
-                response = client.post(url, json=payload, headers=headers)
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=payload, headers=headers, timeout=self.timeout) as response:
+                        # Log response status
+                        logger.debug(f"API response status: {response.status}")
 
-                # Log response status
-                logger.debug(f"API response status: {response.status_code}")
+                        # Handle non-200 status codes
+                        if response.status != 200:
+                            error_text = await response.text()
+                            logger.error(f"API returned status {response.status}: {error_text}")
+                            try:
+                                error_data = await response.json()
+                                error_msg = error_data.get("error", {}).get("message", error_text)
+                            except (json.JSONDecodeError, ValueError, KeyError):
+                                error_msg = error_text
+                            raise Exception(f"API error ({response.status}): {error_msg}")
 
-                # Handle non-200 status codes
-                if response.status_code != 200:
-                    error_text = response.text
-                    logger.error(f"API returned status {response.status_code}: {error_text}")
-                    try:
-                        error_data = response.json()
-                        error_msg = error_data.get("error", {}).get("message", error_text)
-                    except (json.JSONDecodeError, ValueError, KeyError):
-                        error_msg = error_text
-                    raise Exception(f"API error ({response.status_code}): {error_msg}")
-
-                # Parse JSON response
-                try:
-                    data = response.json()
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON response: {response.text}")
-                    raise Exception(f"Invalid JSON response from API: {str(e)}")
+                        # Parse JSON response
+                        try:
+                            data = await response.json()
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse JSON response: {await response.text()}")
+                            raise Exception(f"Invalid JSON response from API: {str(e)}")
             
             # Validate response structure - ensure data is a dict
             if not isinstance(data, dict):
@@ -275,7 +277,7 @@ class GrokAPI:
             else:
                 raise Exception(f"API call failed: {error_msg}")
     
-    def generate_optimized_output(
+    async def generate_optimized_output(
         self,
         optimized_prompt: str,
         max_tokens: int = 1000
@@ -331,7 +333,7 @@ class GrokAPI:
         
         return sanitized
     
-    def handle_identity_query(self, query: str) -> Optional[str]:
+    async def handle_identity_query(self, query: str) -> Optional[str]:
         """
         Handle identity-related queries specifically.
         
