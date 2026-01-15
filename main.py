@@ -7,6 +7,7 @@ import streamlit as st
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from pathlib import Path
 import json
 import time
 
@@ -213,44 +214,51 @@ def show_optimize_page():
                             st.error(f"Invalid type: {type_error}")
                             return
                         
-                            # Optimize with progress updates
-                            orchestrator = AgentConfigManager.apply_config_to_agent(
-                                None, st.session_state.agent_config
-                            )
-                            
-                            status_container.info("⏳ Step 2/4: Diagnosing issues...")
-                            time.sleep(0.5)  # Brief pause for UX
-                            
-                            result = orchestrator.optimize_prompt(
-                                sanitized, prompt_type_enum, methodology=thinking_mode
-                            )
-                            
-                            status_container.info("⏳ Step 3/4: Designing optimized version...")
-                            time.sleep(0.5)
-                            
-                            status_container.info("⏳ Step 4/4: Evaluating quality...")
-                            time.sleep(0.5)
-                            
-                            st.session_state.optimization_result = result
-                            st.session_state.history.append(result)
-                            
-                            # Clear progress indicators
+                        # Create progress containers
+                        progress_container = st.empty()
+                        status_container = st.empty()
+                        
+                        # Optimize with progress updates
+                        status_container.info("⏳ Step 1/4: Deconstructing prompt...")
+                        orchestrator = AgentConfigManager.apply_config_to_agent(
+                            None, st.session_state.agent_config
+                        )
+                        
+                        status_container.info("⏳ Step 2/4: Diagnosing issues...")
+                        time.sleep(0.5)  # Brief pause for UX
+                        
+                        result = orchestrator.optimize_prompt(
+                            sanitized, prompt_type_enum, methodology=thinking_mode
+                        )
+                        
+                        status_container.info("⏳ Step 3/4: Designing optimized version...")
+                        time.sleep(0.5)
+                        
+                        status_container.info("⏳ Step 4/4: Evaluating quality...")
+                        time.sleep(0.5)
+                        
+                        st.session_state.optimization_result = result
+                        st.session_state.history.append(result)
+                        
+                        # Clear progress indicators
+                        progress_container.empty()
+                        status_container.empty()
+                        
+                        st.success("✅ Optimization complete!")
+                        
+                        # Show cost info
+                        cost_optimizer = get_cost_optimizer()
+                        recent_cost = cost_optimizer.records[-1] if cost_optimizer.records else None
+                        if recent_cost:
+                            st.info(f"💰 Cost: ${recent_cost.cost_usd:.4f} | Tokens: {recent_cost.total_tokens:,}")
+                        
+                    except Exception as e:
+                        logger.error(f"Optimization error: {str(e)}")
+                        if 'progress_container' in locals():
                             progress_container.empty()
+                        if 'status_container' in locals():
                             status_container.empty()
-                            
-                            st.success("✅ Optimization complete!")
-                            
-                            # Show cost info
-                            cost_optimizer = get_cost_optimizer()
-                            recent_cost = cost_optimizer.records[-1] if cost_optimizer.records else None
-                            if recent_cost:
-                                st.info(f"💰 Cost: ${recent_cost.cost_usd:.4f} | Tokens: {recent_cost.total_tokens:,}")
-                            
-                        except Exception as e:
-                            logger.error(f"Optimization error: {str(e)}")
-                            progress_container.empty()
-                            status_container.empty()
-                            st.error(f"❌ Error: {str(e)}")
+                        st.error(f"❌ Error: {str(e)}")
     
     with col2:
         st.subheader("📊 Results")

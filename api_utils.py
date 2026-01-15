@@ -48,8 +48,9 @@ class GrokAPI:
         """
         self.api_key = settings.xai_api_key
         self.base_url = settings.xai_api_base.rstrip('/')
-        self.default_model = settings.xai_model
-        self.light_model = getattr(settings, 'xai_light_model', self.default_model)  # Fallback to default if not set
+        self.default_model = settings.xai_model  # Default: grok-4-1-fast-reasoning
+        # Use fast-reasoning for both default and light model (fast reasoning is already optimized)
+        self.light_model = getattr(settings, 'xai_light_model', self.default_model) or self.default_model
         self.timeout = timeout
     
     @track_performance("grok_api.generate_completion")
@@ -111,71 +112,71 @@ class GrokAPI:
         try:
             # Wrap API call in circuit breaker
             def _make_request():
-            messages = []
+                messages = []
 
-            # Build system prompt with persona enforcement
-            full_system_prompt = ""
-            if enforce_persona:
-                full_system_prompt = BASE_PERSONA_PROMPT
-                if system_prompt:
-                    full_system_prompt += f"\n\n{system_prompt}"
-            else:
-                full_system_prompt = system_prompt or ""
+                # Build system prompt with persona enforcement
+                full_system_prompt = ""
+                if enforce_persona:
+                    full_system_prompt = BASE_PERSONA_PROMPT
+                    if system_prompt:
+                        full_system_prompt += f"\n\n{system_prompt}"
+                else:
+                    full_system_prompt = system_prompt or ""
 
-            if full_system_prompt:
-                messages.append({"role": "system", "content": full_system_prompt})
+                if full_system_prompt:
+                    messages.append({"role": "system", "content": full_system_prompt})
 
-            messages.append({"role": "user", "content": prompt})
-            
-            payload = {
-                "model": self.light_model if max_tokens < 1000 else self.default_model,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            }
-            
-            # Add tools if provided
-            if tools:
-                payload["tools"] = tools
-                payload["tool_choice"] = tool_choice or "auto"
-            
-            # Make API request
-            url = f"{self.base_url}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            logger.debug(f"Making API request to {url} with model {payload['model']}")
+                messages.append({"role": "user", "content": prompt})
+                
+                payload = {
+                    "model": self.light_model if max_tokens < 1000 else self.default_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                
+                # Add tools if provided
+                if tools:
+                    payload["tools"] = tools
+                    payload["tool_choice"] = tool_choice or "auto"
+                
+                # Make API request
+                url = f"{self.base_url}/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                logger.debug(f"Making API request to {url} with model {payload['model']}")
 
                 # Use connection pooling for better performance
                 # Track LLM call for observability (cost, latency, tokens)
                 metrics = get_metrics()
-                llm_call_context = None
                 with metrics.time_block("api_request"):
                     # Use pooled client for connection reuse
                     client = get_pooled_client()
                     response = client.post(url, json=payload, headers=headers)
-                        # Log response status
-                        logger.debug(f"API response status: {response.status_code}")
+                    
+                    # Log response status
+                    logger.debug(f"API response status: {response.status_code}")
 
-                        # Handle non-200 status codes
-                        if response.status_code != 200:
-                            error_text = response.text
-                            logger.error(f"API returned status {response.status_code}: {error_text}")
-                            try:
-                                error_data = response.json()
-                                error_msg = error_data.get("error", {}).get("message", error_text)
-                            except (json.JSONDecodeError, ValueError, KeyError):
-                                error_msg = error_text
-                            raise Exception(f"API error ({response.status_code}): {error_msg}")
-
-                        # Parse JSON response
+                    # Handle non-200 status codes
+                    if response.status_code != 200:
+                        error_text = response.text
+                        logger.error(f"API returned status {response.status_code}: {error_text}")
                         try:
-                            data = response.json()
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse JSON response: {response.text}")
-                            raise Exception(f"Invalid JSON response from API: {str(e)}")
+                            error_data = response.json()
+                            error_msg = error_data.get("error", {}).get("message", error_text)
+                        except (json.JSONDecodeError, ValueError, KeyError):
+                            error_msg = error_text
+                        raise Exception(f"API error ({response.status_code}): {error_msg}")
+
+                    # Parse JSON response
+                    try:
+                        data = response.json()
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse JSON response: {response.text}")
+                        raise Exception(f"Invalid JSON response from API: {str(e)}")
                 
                 return data
             
@@ -267,7 +268,7 @@ class GrokAPI:
             result = {
                 "content": content,
                 "tool_calls": tool_calls,
-                "model": data.get("model", self.model),
+                "model": data.get("model", self.default_model),
                 "usage": {
                     "prompt_tokens": usage_data.get("prompt_tokens", 0) or 0,
                     "completion_tokens": usage_data.get("completion_tokens", 0) or 0,
