@@ -234,7 +234,7 @@ class DeconstructorAgent(BaseAgent):
     role = "Break down vague or unstructured prompts into clear, analyzable components"
     default_temperature = 0.5
 
-    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Deconstruct a prompt into components."""
         system_prompt = f"""As NextEleven AI's Deconstructor specialist, your role is to break down vague or unstructured prompts into clear, analyzable components.
 
@@ -261,7 +261,7 @@ class DiagnoserAgent(BaseAgent):
     role = "Identify weaknesses, ambiguities, and potential issues in prompts"
     default_temperature = 0.4
 
-    async def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
+    def process(self, prompt: str, deconstruction: str, prompt_type: PromptType) -> AgentOutput:
         """Diagnose issues in a prompt."""
         system_prompt = f"""As NextEleven AI's Diagnoser specialist, your role is to identify weaknesses and issues in prompts.
 
@@ -294,7 +294,7 @@ class DesignerAgent(BaseAgent):
     default_temperature = 0.6
     default_max_tokens = 2000
 
-    async def process(
+    def process(
         self,
         prompt: str,
         deconstruction: str,
@@ -370,7 +370,7 @@ class EvaluatorAgent(BaseAgent):
     role = "Evaluate prompt quality and provide scores"
     default_temperature = 0.3
 
-    async def process(
+    def process(
         self,
         original_prompt: str,
         optimized_prompt: str,
@@ -558,7 +558,7 @@ class ChainOfThoughtAgent(BaseAgent):
     role = "Guide the user through a step-by-step reasoning process"
     default_temperature = 0.6
     
-    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Process a prompt with chain of thought reasoning."""
         system_prompt = f"""As NextEleven AI's Chain of Thought specialist, your role is to guide the user through a step-by-step reasoning process to solve complex problems.
 
@@ -578,7 +578,7 @@ class TreeOfThoughtAgent(BaseAgent):
     role = "Explore multiple reasoning paths to find the best solution"
     default_temperature = 0.7
     
-    async def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
+    def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Process a prompt with tree of thought reasoning."""
         system_prompt = f"""As NextEleven AI's Tree of Thought specialist, your role is to explore multiple reasoning paths to find the best solution to complex problems.
 
