@@ -139,18 +139,20 @@ class AgentConfigManager:
     ) -> OrchestratorAgent:
         """
         Apply configuration to an orchestrator agent.
-        
-        Note: This is a placeholder - actual implementation would require
-        modifying the OrchestratorAgent class to accept configuration.
-        
+
+        Creates a new OrchestratorAgent instance with the specified configuration.
+
         Args:
-            orchestrator: OrchestratorAgent instance
+            orchestrator: OrchestratorAgent instance (not used in current implementation)
             config: Configuration dictionary
-            
+
         Returns:
-            Modified orchestrator (or original if modification not possible)
+            New OrchestratorAgent instance with applied configuration
         """
-        # In a full implementation, we would modify the orchestrator's
-        # behavior based on the config. For now, we return the original.
-        # This would require changes to the agents.py module.
-        return orchestrator
+        # Validate config first
+        if not AgentConfigManager._validate_config(config):
+            logger.warning("Invalid agent configuration provided, using defaults")
+            config = AgentConfigManager.DEFAULT_CONFIG
+
+        # Create new orchestrator with config
+        return OrchestratorAgent(config=config)

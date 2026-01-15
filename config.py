@@ -58,11 +58,13 @@ class Settings:
         # Database
         self.database_url = get_setting("DATABASE_URL", "sqlite:///prompt_optimizer.db") or get_setting("database_url", "sqlite:///prompt_optimizer.db")
         
-        # Usage Limits
-        free_limit = get_setting("FREE_TIER_DAILY_LIMIT", "5") or get_setting("free_tier_daily_limit", "5")
-        paid_limit = get_setting("PAID_TIER_DAILY_LIMIT", "1000") or get_setting("paid_tier_daily_limit", "1000")
-        self.free_tier_daily_limit = int(free_limit) if free_limit else 5
-        self.paid_tier_daily_limit = int(paid_limit) if paid_limit else 1000
+        # Personal Settings (Single User Mode)
+        self.default_temperature = float(get_setting("DEFAULT_TEMPERATURE", "0.7") or get_setting("default_temperature", "0.7"))
+        self.default_max_tokens = int(get_setting("DEFAULT_MAX_TOKENS", "2000") or get_setting("default_max_tokens", "2000"))
+        self.preferred_thinking_mode = get_setting("PREFERRED_THINKING_MODE", "4d") or get_setting("preferred_thinking_mode", "4d")
+        self.auto_save_sessions = (get_setting("AUTO_SAVE_SESSIONS", "true") or get_setting("auto_save_sessions", "true")).lower() == "true"
+        self.show_token_costs = (get_setting("SHOW_TOKEN_COSTS", "true") or get_setting("show_token_costs", "true")).lower() == "true"
+        self.default_prompt_type = get_setting("DEFAULT_PROMPT_TYPE", "system_prompt") or get_setting("default_prompt_type", "system_prompt")
         
         # Grok Collections API Configuration (Optional - for RAG)
         self.collection_id_prompt_examples = get_setting("COLLECTION_ID_PROMPT_EXAMPLES") or get_setting("collection_id_prompt_examples")
@@ -84,8 +86,14 @@ if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING"):
             self.xai_model = os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning")
             self.secret_key = os.getenv("SECRET_KEY", "test_secret")
             self.database_url = os.getenv("DATABASE_URL", "sqlite:///test.db")
-            self.free_tier_daily_limit = int(os.getenv("FREE_TIER_DAILY_LIMIT", "5"))
-            self.paid_tier_daily_limit = int(os.getenv("PAID_TIER_DAILY_LIMIT", "1000"))
+            # Personal settings for single-user mode
+            self.default_temperature = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
+            self.default_max_tokens = int(os.getenv("DEFAULT_MAX_TOKENS", "2000"))
+            self.preferred_thinking_mode = os.getenv("PREFERRED_THINKING_MODE", "4d")
+            self.auto_save_sessions = os.getenv("AUTO_SAVE_SESSIONS", "true").lower() == "true"
+            self.show_token_costs = os.getenv("SHOW_TOKEN_COSTS", "true").lower() == "true"
+            self.default_prompt_type = os.getenv("DEFAULT_PROMPT_TYPE", "system_prompt")
+            # Keep collections for backward compatibility
             self.collection_id_prompt_examples = os.getenv("COLLECTION_ID_PROMPT_EXAMPLES")
             self.collection_id_marketing = os.getenv("COLLECTION_ID_MARKETING")
             self.collection_id_technical = os.getenv("COLLECTION_ID_TECHNICAL")

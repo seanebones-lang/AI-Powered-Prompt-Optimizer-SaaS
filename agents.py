@@ -203,10 +203,26 @@ class BaseAgent:
     def _get_prompt_type_context(self, prompt_type: PromptType) -> str:
         """Get type-specific context for prompts."""
         contexts = {
-            PromptType.BUILD_AGENT: "Focus on creating intelligent agents tailored to specific tasks.",
-            PromptType.REQUEST_BUILD: "Focus on requesting builds or implementations for specific functionalities.",
-            PromptType.DEPLOYMENT_OPTIONS: "Focus on identifying the best deployment strategies and options.",
-            PromptType.SYSTEM_IMPROVEMENT: "Focus on generating ideas to enhance and improve the system."
+            # Agent Development
+            PromptType.SYSTEM_PROMPT: "Focus on creating effective system prompts for AI agents with clear instructions, constraints, and behavior guidelines.",
+            PromptType.AGENT_PERSONA: "Focus on developing detailed agent personas, personality traits, communication styles, and behavioral patterns.",
+            PromptType.TOOL_DEFINITION: "Focus on defining tool specifications, parameters, error handling, and integration requirements.",
+            PromptType.MULTI_AGENT_WORKFLOW: "Focus on designing orchestration patterns for multiple agents working together.",
+
+            # Build Planning
+            PromptType.BUILD_PLAN: "Focus on creating comprehensive project specifications, requirements, timelines, and implementation strategies.",
+            PromptType.ARCHITECTURE: "Focus on system design, component relationships, data flows, and technical architecture decisions.",
+            PromptType.API_DESIGN: "Focus on API specifications, endpoints, data models, authentication, and integration patterns.",
+
+            # Code & Technical
+            PromptType.CODE_GENERATION: "Focus on generating high-quality, maintainable code with proper error handling and documentation.",
+            PromptType.CODE_REVIEW: "Focus on identifying code quality issues, security vulnerabilities, and improvement opportunities.",
+            PromptType.DOCUMENTATION: "Focus on creating clear, comprehensive documentation for users and developers.",
+
+            # Reasoning Modes
+            PromptType.CHAIN_OF_THOUGHT: "Focus on step-by-step reasoning processes and logical problem-solving approaches.",
+            PromptType.TREE_OF_THOUGHT: "Focus on exploring multiple solution paths and evaluating different approaches.",
+            PromptType.REFLECTION: "Focus on self-critique, improvement strategies, and learning from past experiences."
         }
         return contexts.get(prompt_type, "")
 

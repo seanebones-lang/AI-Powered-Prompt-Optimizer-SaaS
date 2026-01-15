@@ -144,12 +144,30 @@ class ABTest(Base):
 class AnalyticsEvent(Base):
     """Model for analytics events tracking."""
     __tablename__ = "analytics_events"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     event_type = Column(String(100), nullable=False)  # optimization, export, api_call, etc.
     event_data = Column(Text, nullable=True)  # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SavedPrompt(Base):
+    """Model for saved optimized prompts library."""
+    __tablename__ = "saved_prompts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    original_prompt = Column(Text)
+    optimized_prompt = Column(Text, nullable=False)
+    prompt_type = Column(String(50))
+    quality_score = Column(Integer)
+    tags = Column(Text)  # JSON array
+    folder = Column(String(100), default="default")
+    is_template = Column(Boolean, default=False)
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Database:
@@ -311,12 +329,17 @@ class Database:
     
     def save_session(
         self,
-        user_id: Optional[int],
-        original_prompt: str,
-        prompt_type: str,
+        user_id: Optional[int] = None,
+        original_prompt: str = "",
+        prompt_type: str = "",
         optimized_prompt: Optional[str] = None,
         sample_output: Optional[str] = None,
-        quality_score: Optional[int] = None
+        quality_score: Optional[int] = None,
+        deconstruction: Optional[str] = None,
+        diagnosis: Optional[str] = None,
+        evaluation: Optional[str] = None,
+        tokens_used: Optional[int] = None,
+        processing_time: Optional[float] = None
     ) -> Optional[OptimizationSession]:
         """Save an optimization session."""
         db = self.get_session()
@@ -327,7 +350,12 @@ class Database:
                 prompt_type=prompt_type,
                 optimized_prompt=optimized_prompt,
                 sample_output=sample_output,
-                quality_score=quality_score
+                quality_score=quality_score,
+                deconstruction=deconstruction,
+                diagnosis=diagnosis,
+                evaluation=evaluation,
+                tokens_used=tokens_used,
+                processing_time=processing_time
             )
             db.add(session)
             db.commit()
@@ -623,6 +651,161 @@ class Database:
                 "avg_quality_score": round(float(avg_quality_score), 2),
                 "events_by_type": {}
             }
+        finally:
+            db.close()
+
+    def save_prompt(
+        self,
+        name: str,
+        optimized_prompt: str,
+        original_prompt: Optional[str] = None,
+        prompt_type: Optional[str] = None,
+        quality_score: Optional[int] = None,
+        tags: Optional[List[str]] = None,
+        folder: str = "default",
+        is_template: bool = False,
+        notes: Optional[str] = None
+    ) -> Optional[SavedPrompt]:
+        """Save an optimized prompt to the library."""
+        db = self.get_session()
+        try:
+            saved_prompt = SavedPrompt(
+                name=name,
+                original_prompt=original_prompt,
+                optimized_prompt=optimized_prompt,
+                prompt_type=prompt_type,
+                quality_score=quality_score,
+                tags=json.dumps(tags) if tags else None,
+                folder=folder,
+                is_template=is_template,
+                notes=notes
+            )
+            db.add(saved_prompt)
+            db.commit()
+            db.refresh(saved_prompt)
+            return saved_prompt
+        except SQLAlchemyError as e:
+            logger.error(f"Error saving prompt: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+
+    def get_saved_prompts(
+        self,
+        folder: Optional[str] = None,
+        prompt_type: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        is_template: Optional[bool] = None,
+        search_query: Optional[str] = None
+    ) -> List[SavedPrompt]:
+        """Get saved prompts with optional filtering."""
+        db = self.get_session()
+        try:
+            query = db.query(SavedPrompt)
+
+            if folder:
+                query = query.filter(SavedPrompt.folder == folder)
+            if prompt_type:
+                query = query.filter(SavedPrompt.prompt_type == prompt_type)
+            if is_template is not None:
+                query = query.filter(SavedPrompt.is_template == is_template)
+            if search_query:
+                # Search in name, notes, and optimized_prompt
+                search_filter = f"%{search_query}%"
+                query = query.filter(
+                    (SavedPrompt.name.ilike(search_filter)) |
+                    (SavedPrompt.notes.ilike(search_filter)) |
+                    (SavedPrompt.optimized_prompt.ilike(search_filter))
+                )
+            if tags:
+                # Filter by tags (JSON array contains any of the specified tags)
+                for tag in tags:
+                    query = query.filter(SavedPrompt.tags.like(f'%"{tag}"%'))
+
+            return query.order_by(SavedPrompt.updated_at.desc()).all()
+        finally:
+            db.close()
+
+    def get_saved_prompt(self, prompt_id: int) -> Optional[SavedPrompt]:
+        """Get a specific saved prompt by ID."""
+        db = self.get_session()
+        try:
+            return db.query(SavedPrompt).filter(SavedPrompt.id == prompt_id).first()
+        finally:
+            db.close()
+
+    def update_saved_prompt(
+        self,
+        prompt_id: int,
+        **updates
+    ) -> Optional[SavedPrompt]:
+        """Update a saved prompt."""
+        db = self.get_session()
+        try:
+            prompt = db.query(SavedPrompt).filter(SavedPrompt.id == prompt_id).first()
+            if not prompt:
+                return None
+
+            # Handle tags specially (convert list to JSON)
+            if 'tags' in updates and isinstance(updates['tags'], list):
+                updates['tags'] = json.dumps(updates['tags'])
+
+            for key, value in updates.items():
+                if hasattr(prompt, key):
+                    setattr(prompt, key, value)
+
+            db.commit()
+            db.refresh(prompt)
+            return prompt
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating saved prompt: {str(e)}")
+            db.rollback()
+            return None
+        finally:
+            db.close()
+
+    def delete_saved_prompt(self, prompt_id: int) -> bool:
+        """Delete a saved prompt."""
+        db = self.get_session()
+        try:
+            prompt = db.query(SavedPrompt).filter(SavedPrompt.id == prompt_id).first()
+            if not prompt:
+                return False
+
+            db.delete(prompt)
+            db.commit()
+            return True
+        except SQLAlchemyError as e:
+            logger.error(f"Error deleting saved prompt: {str(e)}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
+
+    def get_folders(self) -> List[str]:
+        """Get all unique folder names."""
+        db = self.get_session()
+        try:
+            folders = db.query(SavedPrompt.folder).distinct().all()
+            return [folder[0] for folder in folders]
+        finally:
+            db.close()
+
+    def get_tags(self) -> List[str]:
+        """Get all unique tags."""
+        db = self.get_session()
+        try:
+            all_tags = []
+            prompts = db.query(SavedPrompt.tags).filter(SavedPrompt.tags.isnot(None)).all()
+            for tags_json in prompts:
+                if tags_json[0]:
+                    try:
+                        tags = json.loads(tags_json[0])
+                        all_tags.extend(tags)
+                    except json.JSONDecodeError:
+                        continue
+            return list(set(all_tags))  # Remove duplicates
         finally:
             db.close()
 

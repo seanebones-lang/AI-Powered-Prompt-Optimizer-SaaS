@@ -4,7 +4,7 @@ Batch optimization module for processing multiple prompts at once.
 import logging
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from agents import OrchestratorAgent
 from database import db, BatchJob
