@@ -276,7 +276,7 @@ class GrokAPI:
             else:
                 raise Exception(f"API call failed: {error_msg}")
     
-    async def generate_optimized_output(
+    def generate_optimized_output(
         self,
         optimized_prompt: str,
         max_tokens: int = 1000
@@ -332,7 +332,7 @@ class GrokAPI:
         
         return sanitized
     
-    async def handle_identity_query(self, query: str) -> Optional[str]:
+    def handle_identity_query(self, query: str) -> Optional[str]:
         """
         Handle identity-related queries specifically.
         
