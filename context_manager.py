@@ -60,23 +60,23 @@ class CompressionSuggestion:
 
 class ContextWindowManager:
     """Manages context windows and token budgets."""
-    
+
     def __init__(self, model: str = "grok-beta"):
         self.logger = logging.getLogger(__name__)
         self.model = model
         self.context_limit = self._get_context_limit(model)
-    
+
     def _get_context_limit(self, model: str) -> int:
         """Get context limit for a model."""
         model_key = model.upper().replace("-", "_").replace(".", "_")
-        
+
         try:
             return ModelContextLimit[model_key].value
         except KeyError:
             # Default to 128K if unknown
             self.logger.warning(f"Unknown model {model}, defaulting to 128K context")
             return 131072
-    
+
     def count_tokens(
         self,
         text: str,
@@ -96,15 +96,15 @@ class ContextWindowManager:
         """
         if not text:
             return 0
-        
+
         # Simple approximation: ~1.3 tokens per word for English
         # More accurate for GPT models, less so for others
         words = len(text.split())
         chars = len(text)
-        
+
         # Use different heuristics based on model
         target_model = model or self.model
-        
+
         if "gpt" in target_model.lower():
             # GPT tokenizer: ~4 chars per token
             return int(chars / 4)
@@ -117,7 +117,7 @@ class ContextWindowManager:
         else:
             # Default: word-based estimate
             return int(words * 1.3)
-    
+
     def analyze_context_usage(
         self,
         system_prompt: str,
@@ -140,13 +140,13 @@ class ContextWindowManager:
         system_tokens = self.count_tokens(system_prompt)
         user_tokens = self.count_tokens(user_prompt)
         context_tokens = self.count_tokens(context) if context else 0
-        
+
         total_input = system_tokens + user_tokens + context_tokens
         total_with_response = total_input + estimated_response_tokens
-        
+
         remaining = self.context_limit - total_with_response
         percentage = (total_with_response / self.context_limit) * 100
-        
+
         return TokenCount(
             total=total_with_response,
             system_prompt=system_tokens,
@@ -156,7 +156,7 @@ class ContextWindowManager:
             remaining=remaining,
             percentage_used=percentage
         )
-    
+
     def check_budget(
         self,
         token_count: TokenCount,
@@ -173,10 +173,10 @@ class ContextWindowManager:
             Budget check results with warnings
         """
         limit = budget_limit or self.context_limit
-        
+
         status = "ok"
         warnings = []
-        
+
         if token_count.total > limit:
             status = "exceeded"
             warnings.append(f"Token limit exceeded by {token_count.total - limit} tokens")
@@ -186,10 +186,10 @@ class ContextWindowManager:
         elif token_count.percentage_used > 75:
             status = "warning"
             warnings.append(f"Using {token_count.percentage_used:.1f}% of context window")
-        
+
         if token_count.remaining < 500:
             warnings.append("Very little room for response (< 500 tokens)")
-        
+
         return {
             "status": status,
             "within_budget": token_count.total <= limit,
@@ -197,7 +197,7 @@ class ContextWindowManager:
             "usage_percentage": token_count.percentage_used,
             "tokens_over_budget": max(0, token_count.total - limit)
         }
-    
+
     def suggest_compressions(
         self,
         text: str,
@@ -217,7 +217,7 @@ class ContextWindowManager:
         """
         suggestions = []
         current_tokens = self.count_tokens(text)
-        
+
         # Suggestion 1: Remove redundancy
         redundancy_savings = self._estimate_redundancy_savings(text)
         if redundancy_savings > 0:
@@ -230,7 +230,7 @@ class ContextWindowManager:
                 priority="high" if redundancy_savings >= target_reduction * 0.5 else "medium",
                 example=self._find_redundancy_example(text)
             ))
-        
+
         # Suggestion 2: Summarize verbose sections
         if len(text) > 1000:
             summary_savings = int(current_tokens * 0.4)  # 40% reduction
@@ -242,7 +242,7 @@ class ContextWindowManager:
                 savings=summary_savings,
                 priority="high" if summary_savings >= target_reduction else "medium"
             ))
-        
+
         # Suggestion 3: Use abbreviations
         abbrev_savings = self._estimate_abbreviation_savings(text)
         if abbrev_savings > 0:
@@ -255,7 +255,7 @@ class ContextWindowManager:
                 priority="low",
                 example="'for example' → 'e.g.', 'that is' → 'i.e.'"
             ))
-        
+
         # Suggestion 4: Truncate less important sections
         if context_type == "conversation":
             truncate_savings = int(current_tokens * 0.3)
@@ -267,7 +267,7 @@ class ContextWindowManager:
                 savings=truncate_savings,
                 priority="medium"
             ))
-        
+
         # Suggestion 5: Remove examples
         example_savings = self._estimate_example_savings(text)
         if example_savings > 0:
@@ -279,37 +279,37 @@ class ContextWindowManager:
                 savings=example_savings,
                 priority="medium"
             ))
-        
+
         # Sort by priority and savings
         priority_order = {"high": 0, "medium": 1, "low": 2}
         suggestions.sort(key=lambda x: (priority_order[x.priority], -x.savings))
-        
+
         return suggestions
-    
+
     def _estimate_redundancy_savings(self, text: str) -> int:
         """Estimate token savings from removing redundancy."""
         # Look for repeated phrases
         words = text.split()
-        
+
         # Count repeated 3-word phrases
         phrases = {}
         for i in range(len(words) - 2):
             phrase = " ".join(words[i:i+3])
             phrases[phrase] = phrases.get(phrase, 0) + 1
-        
+
         # Calculate savings from duplicates
         redundant_tokens = 0
         for phrase, count in phrases.items():
             if count > 1:
                 # Each duplicate costs ~3 tokens
                 redundant_tokens += (count - 1) * 3
-        
+
         return min(redundant_tokens, int(self.count_tokens(text) * 0.2))  # Max 20% savings
-    
+
     def _find_redundancy_example(self, text: str) -> Optional[str]:
         """Find an example of redundancy in text."""
         words = text.split()
-        
+
         # Look for repeated phrases
         for i in range(len(words) - 2):
             phrase = " ".join(words[i:i+3])
@@ -317,9 +317,9 @@ class ContextWindowManager:
             remaining = " ".join(words[i+3:])
             if phrase in remaining:
                 return f"Repeated: '{phrase}'"
-        
+
         return None
-    
+
     def _estimate_abbreviation_savings(self, text: str) -> int:
         """Estimate savings from using abbreviations."""
         abbreviations = {
@@ -333,10 +333,10 @@ class ContextWindowManager:
             "number": "no.",
             "percent": "%"
         }
-        
+
         savings = 0
         text_lower = text.lower()
-        
+
         for full, abbrev in abbreviations.items():
             count = text_lower.count(full)
             if count > 0:
@@ -344,24 +344,24 @@ class ContextWindowManager:
                 full_tokens = self.count_tokens(full)
                 abbrev_tokens = self.count_tokens(abbrev)
                 savings += count * (full_tokens - abbrev_tokens)
-        
+
         return savings
-    
+
     def _estimate_example_savings(self, text: str) -> int:
         """Estimate savings from removing examples."""
         # Look for example markers
         example_markers = ["for example", "e.g.", "such as", "like:", "example:"]
-        
+
         example_sections = 0
         for marker in example_markers:
             example_sections += text.lower().count(marker)
-        
+
         if example_sections > 0:
             # Assume each example is ~50 tokens
             return min(example_sections * 50, int(self.count_tokens(text) * 0.3))
-        
+
         return 0
-    
+
     def compress_text(
         self,
         text: str,
@@ -380,18 +380,18 @@ class ContextWindowManager:
             Tuple of (compressed_text, final_tokens, changes_made)
         """
         current_tokens = self.count_tokens(text)
-        
+
         if current_tokens <= target_tokens:
             return text, current_tokens, []
-        
+
         changes_made = []
         compressed = text
-        
+
         # Strategy 1: Remove redundant whitespace
         compressed = re.sub(r'\s+', ' ', compressed)
         compressed = compressed.strip()
         changes_made.append("Removed extra whitespace")
-        
+
         # Strategy 2: Use abbreviations
         abbreviations = {
             " for example ": " e.g. ",
@@ -399,12 +399,12 @@ class ContextWindowManager:
             " and so on": " etc.",
             " approximately ": " ~",
         }
-        
+
         for full, abbrev in abbreviations.items():
             if full in compressed:
                 compressed = compressed.replace(full, abbrev)
                 changes_made.append(f"Abbreviated '{full.strip()}' to '{abbrev.strip()}'")
-        
+
         # Strategy 3: Remove filler words if aggressive
         if strategy == "aggressive":
             filler_words = [" really ", " very ", " quite ", " just ", " actually "]
@@ -412,14 +412,14 @@ class ContextWindowManager:
                 if filler in compressed:
                     compressed = compressed.replace(filler, " ")
                     changes_made.append(f"Removed filler word '{filler.strip()}'")
-        
+
         # Strategy 4: Truncate if still over budget
         final_tokens = self.count_tokens(compressed)
         if final_tokens > target_tokens:
             # Calculate how much to keep
             keep_ratio = target_tokens / final_tokens
             keep_chars = int(len(compressed) * keep_ratio)
-            
+
             # Try to truncate at sentence boundary
             truncated = compressed[:keep_chars]
             last_period = truncated.rfind('.')
@@ -427,12 +427,12 @@ class ContextWindowManager:
                 compressed = truncated[:last_period + 1]
             else:
                 compressed = truncated + "..."
-            
-            changes_made.append(f"Truncated to fit budget")
+
+            changes_made.append("Truncated to fit budget")
             final_tokens = self.count_tokens(compressed)
-        
+
         return compressed, final_tokens, changes_made
-    
+
     def optimize_for_model(
         self,
         system_prompt: str,
@@ -456,7 +456,7 @@ class ContextWindowManager:
         """
         model = target_model or self.model
         limit = self._get_context_limit(model)
-        
+
         # Analyze current usage
         token_count = self.analyze_context_usage(
             system_prompt,
@@ -464,10 +464,10 @@ class ContextWindowManager:
             context,
             max_response_tokens
         )
-        
+
         # Check budget
         budget_check = self.check_budget(token_count, limit)
-        
+
         result = {
             "model": model,
             "context_limit": limit,
@@ -481,11 +481,11 @@ class ContextWindowManager:
             },
             "compressed": {}
         }
-        
+
         # If over budget, compress
         if not budget_check["within_budget"]:
             tokens_to_save = budget_check["tokens_over_budget"] + 500  # Extra buffer
-            
+
             # Try compressing each component
             if token_count.context > 0 and context:
                 target_context_tokens = max(100, token_count.context - tokens_to_save)
@@ -497,7 +497,7 @@ class ContextWindowManager:
                 result["compressed"]["context"] = compressed_context
                 result["compressed"]["context_changes"] = changes
                 tokens_to_save -= (token_count.context - final_tokens)
-            
+
             # If still need to save, compress system prompt
             if tokens_to_save > 0:
                 target_system_tokens = max(200, token_count.system_prompt - tokens_to_save)
@@ -508,9 +508,9 @@ class ContextWindowManager:
                 )
                 result["compressed"]["system_prompt"] = compressed_system
                 result["compressed"]["system_prompt_changes"] = changes
-            
+
             result["optimized"] = True
-            
+
             # Recalculate with compressed versions
             new_token_count = self.analyze_context_usage(
                 result["compressed"].get("system_prompt", system_prompt),
@@ -520,9 +520,9 @@ class ContextWindowManager:
             )
             result["new_token_count"] = new_token_count
             result["new_budget_check"] = self.check_budget(new_token_count, limit)
-        
+
         return result
-    
+
     def simulate_context_window(
         self,
         prompts: List[str],
@@ -541,7 +541,7 @@ class ContextWindowManager:
             Simulation results
         """
         limit = self._get_context_limit(model)
-        
+
         results = {
             "model": model,
             "context_limit": limit,
@@ -549,16 +549,16 @@ class ContextWindowManager:
             "results": [],
             "warnings": []
         }
-        
+
         cumulative_tokens = 0
-        
+
         for i, prompt in enumerate(prompts):
             tokens = self.count_tokens(prompt)
             cumulative_tokens += tokens
-            
+
             fits = cumulative_tokens <= limit
             percentage = (cumulative_tokens / limit) * 100
-            
+
             prompt_result = {
                 "index": i,
                 "tokens": tokens,
@@ -567,9 +567,9 @@ class ContextWindowManager:
                 "percentage_used": percentage,
                 "remaining": limit - cumulative_tokens
             }
-            
+
             results["results"].append(prompt_result)
-            
+
             if show_warnings:
                 if not fits:
                     results["warnings"].append(
@@ -579,13 +579,13 @@ class ContextWindowManager:
                     results["warnings"].append(
                         f"After prompt {i}: Using {percentage:.1f}% of context window"
                     )
-        
+
         results["final_usage"] = {
             "total_tokens": cumulative_tokens,
             "percentage": (cumulative_tokens / limit) * 100,
             "fits_in_context": cumulative_tokens <= limit
         }
-        
+
         return results
 
 

@@ -10,7 +10,6 @@ Tests for:
 import pytest
 import logging
 import time
-from unittest.mock import patch, MagicMock
 import os
 
 # Set test environment

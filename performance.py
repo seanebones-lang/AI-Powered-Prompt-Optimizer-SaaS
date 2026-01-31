@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 class HTTPConnectionPool:
     """HTTP connection pool for reusing connections."""
-    
+
     _pools: Dict[str, httpx.Client] = {}
-    
+
     @classmethod
     def get_client(cls, base_url: str, timeout: float = 60.0) -> httpx.Client:
         """
@@ -39,9 +39,9 @@ class HTTPConnectionPool:
                 )
             )
             logger.info(f"Created HTTP connection pool for {base_url}")
-        
+
         return cls._pools[base_url]
-    
+
     @classmethod
     def close_all(cls) -> None:
         """Close all connection pools."""
@@ -66,13 +66,13 @@ def track_performance(metric_name: str):
         def wrapper(*args, **kwargs):
             from monitoring import get_metrics
             metrics = get_metrics()
-            
+
             with metrics.time_block(metric_name):
                 result = func(*args, **kwargs)
-            
+
             metrics.increment(f"{metric_name}.calls")
             return result
-        
+
         return wrapper
     return decorator
 
@@ -87,7 +87,7 @@ def performance_tracker(operation_name: str):
     """
     from monitoring import get_metrics
     metrics = get_metrics()
-    
+
     start_time = time.time()
     try:
         yield
@@ -99,7 +99,7 @@ def performance_tracker(operation_name: str):
 
 class RateLimiter:
     """Enhanced rate limiter with sliding window."""
-    
+
     def __init__(self, max_requests: int, window_seconds: int):
         """
         Initialize rate limiter.
@@ -111,7 +111,7 @@ class RateLimiter:
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests: Dict[str, list] = {}
-    
+
     def is_allowed(self, identifier: str) -> bool:
         """
         Check if request is allowed.
@@ -123,7 +123,7 @@ class RateLimiter:
             True if allowed, False if rate limited
         """
         now = time.time()
-        
+
         # Clean old requests
         if identifier in self.requests:
             self.requests[identifier] = [
@@ -132,26 +132,26 @@ class RateLimiter:
             ]
         else:
             self.requests[identifier] = []
-        
+
         # Check limit
         if len(self.requests[identifier]) >= self.max_requests:
             return False
-        
+
         # Record request
         self.requests[identifier].append(now)
         return True
-    
+
     def get_remaining(self, identifier: str) -> int:
         """Get remaining requests in current window."""
         if identifier not in self.requests:
             return self.max_requests
-        
+
         now = time.time()
         self.requests[identifier] = [
             req_time for req_time in self.requests[identifier]
             if now - req_time < self.window_seconds
         ]
-        
+
         return max(0, self.max_requests - len(self.requests[identifier]))
 
 

@@ -1,18 +1,34 @@
 """
 Database models and utilities for SQLite.
+
 Handles user authentication, session history, and usage tracking.
+
+This module provides:
+- SQLAlchemy ORM models for all data entities
+- Database class with proper session management
+- Context managers for transactional safety
 """
 import logging
 from datetime import datetime, date
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TypeVar, Callable
+from contextlib import contextmanager
+from functools import wraps
+
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, Float, func
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from sqlalchemy.exc import SQLAlchemyError
+
 from config import settings
+from exceptions import (
+    DatabaseConnectionError,
+    DatabaseQueryError,
+)
 import bcrypt
 import json
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar('T')
 
 Base = declarative_base()
 
@@ -20,7 +36,7 @@ Base = declarative_base()
 class User(Base):
     """User model for authentication and subscription management."""
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(100), unique=True, index=True, nullable=False)
@@ -30,7 +46,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     subscription_expires_at = Column(DateTime, nullable=True)
     api_key = Column(String(255), unique=True, nullable=True, index=True)  # For API access
-    
+
     # Relationships
     sessions = relationship("OptimizationSession", back_populates="user")
     agent_configs = relationship("AgentConfig", back_populates="user")
@@ -41,7 +57,7 @@ class User(Base):
 class OptimizationSession(Base):
     """Model for tracking optimization sessions."""
     __tablename__ = "optimization_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     original_prompt = Column(Text, nullable=False)
@@ -57,7 +73,7 @@ class OptimizationSession(Base):
     processing_time = Column(Float, nullable=True)  # seconds
     agent_config_id = Column(Integer, ForeignKey("agent_configs.id"), nullable=True)
     ab_test_id = Column(Integer, ForeignKey("ab_tests.id"), nullable=True)
-    
+
     # Relationships
     user = relationship("User", back_populates="sessions")
     agent_config = relationship("AgentConfig", back_populates="sessions")
@@ -67,12 +83,12 @@ class OptimizationSession(Base):
 class DailyUsage(Base):
     """Model for tracking daily usage limits."""
     __tablename__ = "daily_usage"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date = Column(Date, default=date.today, nullable=False)
     usage_count = Column(Integer, default=0, nullable=False)
-    
+
     # Unique constraint on user_id and date
     __table_args__ = (
         {"sqlite_autoincrement": True},
@@ -82,7 +98,7 @@ class DailyUsage(Base):
 class AgentConfig(Base):
     """Model for custom agent configurations (premium feature)."""
     __tablename__ = "agent_configs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
@@ -91,7 +107,7 @@ class AgentConfig(Base):
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", back_populates="agent_configs")
     sessions = relationship("OptimizationSession", back_populates="agent_config")
@@ -100,7 +116,7 @@ class AgentConfig(Base):
 class BatchJob(Base):
     """Model for batch optimization jobs."""
     __tablename__ = "batch_jobs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     name = Column(String(200), nullable=True)
@@ -112,7 +128,7 @@ class BatchJob(Base):
     results_json = Column(Text, nullable=True)  # JSON array of results
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
-    
+
     # Relationships
     user = relationship("User", back_populates="batch_jobs")
 
@@ -120,7 +136,7 @@ class BatchJob(Base):
 class ABTest(Base):
     """Model for A/B testing prompt variants."""
     __tablename__ = "ab_tests"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     name = Column(String(200), nullable=False)
@@ -134,7 +150,7 @@ class ABTest(Base):
     variant_b_responses = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
-    
+
     # Relationships
     user = relationship("User", back_populates="ab_tests")
     sessions = relationship("OptimizationSession", back_populates="ab_test")
@@ -172,7 +188,7 @@ class SavedPrompt(Base):
 class AgentBlueprint(Base):
     """Model for agent blueprints - complete agent architecture specifications."""
     __tablename__ = "agent_blueprints"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     blueprint_id = Column(String(100), unique=True, nullable=False, index=True)
@@ -181,48 +197,48 @@ class AgentBlueprint(Base):
     agent_type = Column(String(50), nullable=False)  # conversational, task_executor, etc.
     domain = Column(String(100))
     description = Column(Text)
-    
+
     # Core components (stored as JSON)
     system_prompt = Column(Text, nullable=False)
     personality_traits = Column(Text)  # JSON array
     capabilities = Column(Text)  # JSON array
     constraints = Column(Text)  # JSON array
-    
+
     # Tools and integrations (stored as JSON)
     tools = Column(Text)  # JSON array of tool definitions
     integrations = Column(Text)  # JSON array of integration requirements
-    
+
     # Workflow (stored as JSON)
     workflow_steps = Column(Text)  # JSON array
     orchestration_pattern = Column(String(200))
-    
+
     # Configuration (stored as JSON)
     model_config = Column(Text)  # JSON object
-    
+
     # Testing (stored as JSON)
     test_scenarios = Column(Text)  # JSON array
     validation_rules = Column(Text)  # JSON array
-    
+
     # Deployment (stored as JSON)
     deployment_config = Column(Text)  # JSON object
     monitoring_metrics = Column(Text)  # JSON array
     scaling_strategy = Column(String(200))
-    
+
     # Documentation (stored as JSON)
     usage_examples = Column(Text)  # JSON array
     best_practices = Column(Text)  # JSON array
     known_limitations = Column(Text)  # JSON array
-    
+
     # Metadata
     is_favorite = Column(Boolean, default=False)
     is_template = Column(Boolean, default=False)
     tags = Column(Text)  # JSON array
     folder = Column(String(100), default="default")
     parent_blueprint_id = Column(Integer, ForeignKey("agent_blueprints.id"), nullable=True)  # For versioning
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", backref="blueprints")
     versions = relationship("AgentBlueprint", backref="parent", remote_side=[id])
@@ -231,7 +247,7 @@ class AgentBlueprint(Base):
 class PromptVersion(Base):
     """Model for prompt version control."""
     __tablename__ = "prompt_versions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     prompt_id = Column(String(100), nullable=False, index=True)  # Groups versions together
@@ -244,7 +260,7 @@ class PromptVersion(Base):
     is_current = Column(Boolean, default=True)  # Current active version
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100))  # Username or "system"
-    
+
     # Relationships
     user = relationship("User", backref="prompt_versions")
     parent = relationship("PromptVersion", remote_side=[id], backref="children")
@@ -253,7 +269,7 @@ class PromptVersion(Base):
 class RefinementHistory(Base):
     """Model for iterative refinement tracking."""
     __tablename__ = "refinement_history"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     session_id = Column(Integer, ForeignKey("optimization_sessions.id"), nullable=True)
@@ -263,7 +279,7 @@ class RefinementHistory(Base):
     changes_made = Column(Text)  # What was changed
     quality_score = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", backref="refinements")
     session = relationship("OptimizationSession", backref="refinements")
@@ -272,12 +288,12 @@ class RefinementHistory(Base):
 class TestCase(Base):
     """Model for generated test cases."""
     __tablename__ = "test_cases"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     blueprint_id = Column(Integer, ForeignKey("agent_blueprints.id"), nullable=True)
     prompt_id = Column(String(100), nullable=True)  # Link to prompt if not blueprint
-    
+
     test_name = Column(String(200), nullable=False)
     test_type = Column(String(50))  # happy_path, edge_case, error_handling, load_test
     input_data = Column(Text, nullable=False)
@@ -287,10 +303,10 @@ class TestCase(Base):
     passed = Column(Boolean, nullable=True)  # Null = not run yet
     error_message = Column(Text, nullable=True)
     execution_time = Column(Float, nullable=True)  # seconds
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     last_run_at = Column(DateTime, nullable=True)
-    
+
     # Relationships
     user = relationship("User", backref="test_cases")
     blueprint = relationship("AgentBlueprint", backref="test_cases")
@@ -299,22 +315,22 @@ class TestCase(Base):
 class KnowledgeBase(Base):
     """Model for custom domain knowledge bases."""
     __tablename__ = "knowledge_bases"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text)
     domain = Column(String(100))
     is_private = Column(Boolean, default=True)
-    
+
     # Storage info
     document_count = Column(Integer, default=0)
     total_chunks = Column(Integer, default=0)
     vector_store_path = Column(String(500))  # Path to vector store
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", backref="knowledge_bases")
     documents = relationship("KnowledgeDocument", back_populates="knowledge_base")
@@ -323,26 +339,26 @@ class KnowledgeBase(Base):
 class KnowledgeDocument(Base):
     """Model for documents in knowledge bases."""
     __tablename__ = "knowledge_documents"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=False)
     filename = Column(String(500), nullable=False)
     file_type = Column(String(50))  # pdf, txt, md, docx, etc.
     file_size = Column(Integer)  # bytes
     content_hash = Column(String(64))  # SHA-256 hash for deduplication
-    
+
     # Processing info
     chunk_count = Column(Integer, default=0)
     processed = Column(Boolean, default=False)
     processing_error = Column(Text, nullable=True)
-    
+
     # Metadata
     tags = Column(Text)  # JSON array
     category = Column(String(100))
-    
+
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime, nullable=True)
-    
+
     # Relationships
     knowledge_base = relationship("KnowledgeBase", back_populates="documents")
 
@@ -350,22 +366,22 @@ class KnowledgeDocument(Base):
 class CollaborationShare(Base):
     """Model for sharing prompts/blueprints with team members."""
     __tablename__ = "collaboration_shares"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     shared_with_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # What's being shared
     resource_type = Column(String(50), nullable=False)  # prompt, blueprint, knowledge_base
     resource_id = Column(Integer, nullable=False)
-    
+
     # Permissions
     can_view = Column(Boolean, default=True)
     can_edit = Column(Boolean, default=False)
     can_comment = Column(Boolean, default=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     owner = relationship("User", foreign_keys=[owner_id], backref="shares_given")
     shared_with = relationship("User", foreign_keys=[shared_with_id], backref="shares_received")
@@ -374,84 +390,164 @@ class CollaborationShare(Base):
 class Comment(Base):
     """Model for comments and annotations."""
     __tablename__ = "comments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # What's being commented on
     resource_type = Column(String(50), nullable=False)  # prompt, blueprint, etc.
     resource_id = Column(Integer, nullable=False)
-    
+
     # Comment content
     content = Column(Text, nullable=False)
     parent_comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)  # For replies
     is_resolved = Column(Boolean, default=False)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", backref="comments")
     replies = relationship("Comment", backref="parent", remote_side=[id])
 
 
 class Database:
-    """Database management class."""
-    
+    """
+    Database management class with proper session handling.
+
+    Provides:
+    - Connection pooling and engine management
+    - Context managers for transactional safety
+    - Typed exceptions for error handling
+    - Automatic table creation
+
+    Usage:
+        # Using context manager (recommended)
+        with db.session_scope() as session:
+            user = session.query(User).first()
+
+        # Using decorator
+        @db.transactional
+        def create_something(session, data):
+            ...
+    """
+
     def __init__(self):
         """Initialize database connection."""
+        self.engine = None
+        self.SessionLocal = None
+        self._initialized = False
+
         try:
+            connect_args = {}
+            if "sqlite" in settings.database_url:
+                connect_args["check_same_thread"] = False
+
             self.engine = create_engine(
                 settings.database_url,
-                connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+                connect_args=connect_args,
+                pool_pre_ping=True,  # Check connection health
+                pool_recycle=3600,   # Recycle connections hourly
             )
-            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            self.SessionLocal = sessionmaker(
+                autocommit=False,
+                autoflush=False,
+                bind=self.engine
+            )
             self._create_tables()
+            self._initialized = True
+            logger.info("Database initialized successfully")
+
         except Exception as e:
-            logger.warning(f"Could not initialize database: {str(e)}. Using fallback mode.")
-            # Create a dummy engine that won't work but won't crash
-            self.engine = None
-            self.SessionLocal = None
-    
-    def _create_tables(self):
+            logger.warning(
+                f"Could not initialize database: {str(e)}. "
+                "Using fallback mode with limited functionality."
+            )
+
+    @property
+    def is_available(self) -> bool:
+        """Check if database is available."""
+        return self._initialized and self.engine is not None
+
+    def _create_tables(self) -> None:
         """Create all database tables."""
         try:
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
         except SQLAlchemyError as e:
-            logger.warning(f"Could not create database tables: {str(e)}. Using in-memory fallback.")
-            # Don't raise exception - allow app to continue with limited functionality
-    
+            logger.warning(f"Could not create database tables: {str(e)}")
+
     def get_session(self) -> Session:
-        """Get a database session."""
+        """
+        Get a new database session.
+
+        Note: Prefer using session_scope() context manager instead
+        for automatic cleanup and error handling.
+        """
+        if not self.SessionLocal:
+            raise DatabaseConnectionError("Database not initialized")
         return self.SessionLocal()
 
-    def session_scope(self):
+    @contextmanager
+    def session_scope(self, commit: bool = True):
         """
         Context manager for database sessions.
 
         Provides automatic commit on success, rollback on error,
         and proper session cleanup.
 
+        Args:
+            commit: Whether to commit on success (default: True)
+
+        Yields:
+            Database session
+
+        Raises:
+            DatabaseError: On database errors
+
         Usage:
             with db.session_scope() as session:
                 user = session.query(User).first()
         """
-        from contextlib import contextmanager
+        if not self.SessionLocal:
+            raise DatabaseConnectionError("Database not initialized")
 
-        @contextmanager
-        def _session_scope():
-            session = self.SessionLocal()
-            try:
-                yield session
+        session = self.SessionLocal()
+        try:
+            yield session
+            if commit:
                 session.commit()
-            except SQLAlchemyError:
-                session.rollback()
-                raise
-            finally:
-                session.close()
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Database error: {str(e)}")
+            raise DatabaseQueryError(
+                str(e),
+                original_error=e
+            )
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
-        return _session_scope()
+    def transactional(self, func: Callable[..., T]) -> Callable[..., T]:
+        """
+        Decorator for transactional database operations.
+
+        Automatically provides a session and handles commit/rollback.
+
+        Usage:
+            @db.transactional
+            def create_user(session, email, username):
+                user = User(email=email, username=username)
+                session.add(user)
+                return user
+        """
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            with self.session_scope() as session:
+                return func(session, *args, **kwargs)
+        return wrapper
 
     def create_user(
         self,
@@ -466,16 +562,16 @@ class Database:
             existing_user = db.query(User).filter(
                 (User.email == email) | (User.username == username)
             ).first()
-            
+
             if existing_user:
                 return None
-            
+
             # Hash password
             hashed_password = bcrypt.hashpw(
                 password.encode('utf-8'),
                 bcrypt.gensalt()
             ).decode('utf-8')
-            
+
             # Create user
             user = User(
                 email=email,
@@ -492,7 +588,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def authenticate_user(
         self,
         username: str,
@@ -504,7 +600,7 @@ class Database:
             user = db.query(User).filter(User.username == username).first()
             if not user or not user.is_active:
                 return None
-            
+
             if bcrypt.checkpw(
                 password.encode('utf-8'),
                 user.hashed_password.encode('utf-8')
@@ -516,7 +612,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_user(self, user_id: int) -> Optional[User]:
         """Get user by ID."""
         db = self.get_session()
@@ -524,12 +620,12 @@ class Database:
             return db.query(User).filter(User.id == user_id).first()
         finally:
             db.close()
-    
+
     def check_usage_limit(self, user_id: Optional[int]) -> bool:
         """Check if user has reached daily usage limit."""
         # Beta mode: No usage limits
         return True
-    
+
     def increment_usage(self, user_id: Optional[int]):
         """Increment daily usage count."""
         db = self.get_session()
@@ -545,11 +641,11 @@ class Database:
                     DailyUsage.user_id == user_id,
                     DailyUsage.date == today
                 ).first()
-            
+
             if not usage:
                 usage = DailyUsage(user_id=user_id, date=today, usage_count=0)
                 db.add(usage)
-            
+
             usage.usage_count += 1
             db.commit()
         except SQLAlchemyError as e:
@@ -557,7 +653,7 @@ class Database:
             db.rollback()
         finally:
             db.close()
-    
+
     def save_session(
         self,
         user_id: Optional[int] = None,
@@ -598,7 +694,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_user_sessions(
         self,
         user_id: int,
@@ -614,7 +710,7 @@ class Database:
             ).limit(limit).all()
         finally:
             db.close()
-    
+
     def generate_api_key(self, user_id: int) -> Optional[str]:
         """Generate a unique API key for a user."""
         import secrets
@@ -633,7 +729,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_user_by_api_key(self, api_key: str) -> Optional[User]:
         """Get user by API key."""
         db = self.get_session()
@@ -641,7 +737,7 @@ class Database:
             return db.query(User).filter(User.api_key == api_key).first()
         finally:
             db.close()
-    
+
     def create_agent_config(
         self,
         user_id: int,
@@ -659,7 +755,7 @@ class Database:
                     AgentConfig.user_id == user_id,
                     AgentConfig.is_default
                 ).update({"is_default": False})
-            
+
             config = AgentConfig(
                 user_id=user_id,
                 name=name,
@@ -677,7 +773,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_agent_configs(self, user_id: int) -> List[AgentConfig]:
         """Get all agent configurations for a user."""
         db = self.get_session()
@@ -687,7 +783,7 @@ class Database:
             ).order_by(AgentConfig.is_default.desc(), AgentConfig.created_at.desc()).all()
         finally:
             db.close()
-    
+
     def get_default_agent_config(self, user_id: int) -> Optional[AgentConfig]:
         """Get default agent configuration for a user."""
         db = self.get_session()
@@ -698,7 +794,7 @@ class Database:
             ).first()
         finally:
             db.close()
-    
+
     def create_batch_job(
         self,
         user_id: Optional[int],
@@ -726,7 +822,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def update_batch_job(
         self,
         job_id: int,
@@ -741,7 +837,7 @@ class Database:
             job = db.query(BatchJob).filter(BatchJob.id == job_id).first()
             if not job:
                 return None
-            
+
             if status:
                 job.status = status
             if completed_prompts is not None:
@@ -752,7 +848,7 @@ class Database:
                 job.results_json = results_json
             if status == "completed":
                 job.completed_at = datetime.utcnow()
-            
+
             db.commit()
             db.refresh(job)
             return job
@@ -762,7 +858,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def create_ab_test(
         self,
         user_id: Optional[int],
@@ -792,7 +888,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def update_ab_test_results(
         self,
         ab_test_id: int,
@@ -805,14 +901,14 @@ class Database:
             ab_test = db.query(ABTest).filter(ABTest.id == ab_test_id).first()
             if not ab_test:
                 return None
-            
+
             if variant == 'a':
                 ab_test.variant_a_score = score
                 ab_test.variant_a_responses += 1
             elif variant == 'b':
                 ab_test.variant_b_score = score
                 ab_test.variant_b_responses += 1
-            
+
             db.commit()
             db.refresh(ab_test)
             return ab_test
@@ -822,7 +918,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def log_analytics_event(
         self,
         user_id: Optional[int],
@@ -844,7 +940,7 @@ class Database:
             db.rollback()
         finally:
             db.close()
-    
+
     def get_analytics_data(
         self,
         user_id: Optional[int] = None,
@@ -861,21 +957,21 @@ class Database:
                 query = query.filter(AnalyticsEvent.created_at >= datetime.combine(start_date, datetime.min.time()))
             if end_date:
                 query = query.filter(AnalyticsEvent.created_at <= datetime.combine(end_date, datetime.max.time()))
-            
+
             events = query.all()
-            
+
             # Aggregate data
             total_optimizations = db.query(OptimizationSession).filter(
                 OptimizationSession.user_id == user_id if user_id else True
             ).count()
-            
+
             avg_quality_score = db.query(
                 func.avg(OptimizationSession.quality_score)
             ).filter(
                 OptimizationSession.user_id == user_id if user_id else True,
                 OptimizationSession.quality_score.isnot(None)
             ).scalar() or 0
-            
+
             return {
                 "total_events": len(events),
                 "total_optimizations": total_optimizations,
@@ -1039,7 +1135,7 @@ class Database:
             return list(set(all_tags))  # Remove duplicates
         finally:
             db.close()
-    
+
     # Agent Blueprint Methods
     def save_blueprint(
         self,
@@ -1089,7 +1185,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_blueprints(
         self,
         user_id: Optional[int] = None,
@@ -1101,16 +1197,16 @@ class Database:
         db = self.get_session()
         try:
             query = db.query(AgentBlueprint)
-            
+
             if user_id is not None:
                 query = query.filter(AgentBlueprint.user_id == user_id)
             if folder:
                 query = query.filter(AgentBlueprint.folder == folder)
             if is_template is not None:
                 query = query.filter(AgentBlueprint.is_template == is_template)
-            
+
             blueprints = query.order_by(AgentBlueprint.created_at.desc()).all()
-            
+
             result = []
             for bp in blueprints:
                 # Filter by tags if specified
@@ -1118,7 +1214,7 @@ class Database:
                     bp_tags = json.loads(bp.tags) if bp.tags else []
                     if not any(tag in bp_tags for tag in tags):
                         continue
-                
+
                 result.append({
                     "id": bp.id,
                     "blueprint_id": bp.blueprint_id,
@@ -1133,11 +1229,11 @@ class Database:
                     "tags": json.loads(bp.tags) if bp.tags else [],
                     "created_at": bp.created_at.isoformat()
                 })
-            
+
             return result
         finally:
             db.close()
-    
+
     def get_blueprint_by_id(self, blueprint_id: str) -> Optional[Dict]:
         """Get full blueprint details by ID."""
         db = self.get_session()
@@ -1145,10 +1241,10 @@ class Database:
             bp = db.query(AgentBlueprint).filter(
                 AgentBlueprint.blueprint_id == blueprint_id
             ).first()
-            
+
             if not bp:
                 return None
-            
+
             return {
                 "id": bp.id,
                 "blueprint_id": bp.blueprint_id,
@@ -1183,7 +1279,7 @@ class Database:
             }
         finally:
             db.close()
-    
+
     # Prompt Versioning Methods
     def create_prompt_version(
         self,
@@ -1205,7 +1301,7 @@ class Database:
                 PromptVersion.prompt_id == prompt_id,
                 PromptVersion.is_current == True
             ).update({"is_current": False})
-            
+
             version = PromptVersion(
                 user_id=user_id,
                 prompt_id=prompt_id,
@@ -1228,7 +1324,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_prompt_versions(self, prompt_id: str) -> List[Dict]:
         """Get all versions of a prompt."""
         db = self.get_session()
@@ -1236,7 +1332,7 @@ class Database:
             versions = db.query(PromptVersion).filter(
                 PromptVersion.prompt_id == prompt_id
             ).order_by(PromptVersion.version_number.desc()).all()
-            
+
             return [{
                 "id": v.id,
                 "version_number": v.version_number,
@@ -1250,7 +1346,7 @@ class Database:
             } for v in versions]
         finally:
             db.close()
-    
+
     # Refinement History Methods
     def add_refinement(
         self,
@@ -1284,7 +1380,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_refinement_history(self, session_id: int) -> List[Dict]:
         """Get refinement history for a session."""
         db = self.get_session()
@@ -1292,7 +1388,7 @@ class Database:
             refinements = db.query(RefinementHistory).filter(
                 RefinementHistory.session_id == session_id
             ).order_by(RefinementHistory.iteration_number).all()
-            
+
             return [{
                 "id": r.id,
                 "iteration_number": r.iteration_number,
@@ -1304,7 +1400,7 @@ class Database:
             } for r in refinements]
         finally:
             db.close()
-    
+
     # Test Case Methods
     def save_test_case(
         self,
@@ -1334,7 +1430,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_test_cases(
         self,
         user_id: Optional[int] = None,
@@ -1345,16 +1441,16 @@ class Database:
         db = self.get_session()
         try:
             query = db.query(TestCase)
-            
+
             if user_id is not None:
                 query = query.filter(TestCase.user_id == user_id)
             if blueprint_id is not None:
                 query = query.filter(TestCase.blueprint_id == blueprint_id)
             if prompt_id is not None:
                 query = query.filter(TestCase.prompt_id == prompt_id)
-            
+
             test_cases = query.all()
-            
+
             return [{
                 "id": tc.id,
                 "test_name": tc.test_name,
@@ -1371,7 +1467,7 @@ class Database:
             } for tc in test_cases]
         finally:
             db.close()
-    
+
     # Knowledge Base Methods
     def create_knowledge_base(
         self,
@@ -1401,7 +1497,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_knowledge_bases(self, user_id: int) -> List[Dict]:
         """Get user's knowledge bases."""
         db = self.get_session()
@@ -1409,7 +1505,7 @@ class Database:
             kbs = db.query(KnowledgeBase).filter(
                 KnowledgeBase.user_id == user_id
             ).all()
-            
+
             return [{
                 "id": kb.id,
                 "name": kb.name,
@@ -1423,7 +1519,7 @@ class Database:
             } for kb in kbs]
         finally:
             db.close()
-    
+
     # Collaboration Methods
     def share_resource(
         self,
@@ -1457,7 +1553,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def add_comment(
         self,
         user_id: int,
@@ -1486,7 +1582,7 @@ class Database:
             return None
         finally:
             db.close()
-    
+
     def get_comments(
         self,
         resource_type: str,
@@ -1500,17 +1596,17 @@ class Database:
                 Comment.resource_id == resource_id,
                 Comment.parent_comment_id == None  # Only top-level comments
             ).order_by(Comment.created_at.desc()).all()
-            
+
             result = []
             for comment in comments:
                 # Get user info
                 user = db.query(User).filter(User.id == comment.user_id).first()
-                
+
                 # Get replies
                 replies = db.query(Comment).filter(
                     Comment.parent_comment_id == comment.id
                 ).order_by(Comment.created_at).all()
-                
+
                 result.append({
                     "id": comment.id,
                     "user": {
@@ -1531,7 +1627,7 @@ class Database:
                         "created_at": r.created_at.isoformat()
                     } for r in replies]
                 })
-            
+
             return result
         finally:
             db.close()

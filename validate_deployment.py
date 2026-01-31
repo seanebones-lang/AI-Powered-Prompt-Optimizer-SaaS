@@ -13,7 +13,7 @@ def validate_syntax():
     print("🔍 Validating Python syntax...")
     files = ["api_utils.py", "agents.py", "main.py", "enterprise_integration.py", "config.py"]
     all_valid = True
-    
+
     for file in files:
         if not os.path.exists(file):
             print(f"  ⚠️  {file}: Not found (may be expected)")
@@ -27,15 +27,15 @@ def validate_syntax():
             all_valid = False
         except Exception as e:
             print(f"  ⚠️  {file}: Error - {str(e)}")
-    
+
     return all_valid
 
 def validate_fixes():
     """Validate that all critical fixes are in place."""
     print("\n🔍 Validating fixes...")
-    
+
     checks = []
-    
+
     # Check 1: api_utils.py - no self.model
     try:
         with open("api_utils.py", 'r') as f:
@@ -48,9 +48,9 @@ def validate_fixes():
                 checks.append(("api_utils.py: self.default_model exists", True))
             else:
                 checks.append(("api_utils.py: self.default_model exists", False))
-    except Exception as e:
+    except Exception:
         checks.append(("api_utils.py: Could not check", False))
-    
+
     # Check 2: connection_pool.py - HTTP/2 disabled
     try:
         with open("connection_pool.py", 'r') as f:
@@ -59,9 +59,9 @@ def validate_fixes():
                 checks.append(("connection_pool.py: HTTP/2 disabled", True))
             else:
                 checks.append(("connection_pool.py: HTTP/2 disabled", False))
-    except Exception as e:
+    except Exception:
         checks.append(("connection_pool.py: Could not check", False))
-    
+
     # Check 3: agents.py - type validation
     try:
         with open("agents.py", 'r') as f:
@@ -70,9 +70,9 @@ def validate_fixes():
                 checks.append(("agents.py: Response type validation", True))
             else:
                 checks.append(("agents.py: Response type validation", False))
-    except Exception as e:
+    except Exception:
         checks.append(("agents.py: Could not check", False))
-    
+
     # Check 4: main.py - Path import
     try:
         with open("main.py", 'r') as f:
@@ -81,9 +81,9 @@ def validate_fixes():
                 checks.append(("main.py: Path import present", True))
             else:
                 checks.append(("main.py: Path import present", False))
-    except Exception as e:
+    except Exception:
         checks.append(("main.py: Could not check", False))
-    
+
     # Check 5: agents.py - improved extraction
     try:
         with open("agents.py", 'r') as f:
@@ -92,22 +92,22 @@ def validate_fixes():
                 checks.append(("agents.py: Improved extraction (5 strategies)", True))
             else:
                 checks.append(("agents.py: Improved extraction (5 strategies)", False))
-    except Exception as e:
+    except Exception:
         checks.append(("agents.py: Could not check", False))
-    
+
     all_passed = True
     for check_name, passed in checks:
         status = "✅" if passed else "❌"
         print(f"  {status} {check_name}")
         if not passed:
             all_passed = False
-    
+
     return all_passed
 
 def validate_config():
     """Validate configuration."""
     print("\n🔍 Validating configuration...")
-    
+
     try:
         with open("config.py", 'r') as f:
             content = f.read()
@@ -127,29 +127,29 @@ def main():
     print("🔍 Deployment Validation")
     print("=" * 60)
     print("")
-    
+
     results = []
-    
+
     # Run validations
     results.append(("Syntax", validate_syntax()))
     results.append(("Fixes", validate_fixes()))
     results.append(("Config", validate_config()))
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("📊 Validation Summary")
     print("=" * 60)
-    
+
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for check_name, result in results:
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"  {status}: {check_name}")
-    
+
     print("")
     print(f"Results: {passed}/{total} validations passed")
-    
+
     if passed == total:
         print("\n✅ ALL VALIDATIONS PASSED - Code is ready for deployment!")
         return 0

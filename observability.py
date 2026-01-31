@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 from functools import wraps
 from contextlib import contextmanager
 import os
-import json
 
 # Check for optional dependencies
 try:

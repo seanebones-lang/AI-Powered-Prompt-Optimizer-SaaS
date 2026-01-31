@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 class ABTesting:
     """Handles A/B testing of prompt variants."""
-    
+
     def __init__(self):
         self.orchestrator = OrchestratorAgent()
-    
+
     def create_test(
         self,
         user_id: Optional[int],
@@ -47,27 +47,27 @@ class ABTesting:
                 if not is_valid:
                     logger.error("Invalid original prompt")
                     return None
-                
+
                 # Use creative type as default for variant generation
                 prompt_type = PromptType.CREATIVE
-                
+
                 # Generate variant A
                 if not variant_a:
                     result_a = self.orchestrator.optimize_prompt(sanitized_prompt, prompt_type)
                     variant_a = result_a.get("optimized_prompt", "")
-                
+
                 # Generate variant B with different approach (could use different temperature or prompt)
                 if not variant_b:
                     result_b = self.orchestrator.optimize_prompt(sanitized_prompt, prompt_type)
                     variant_b = result_b.get("optimized_prompt", "")
-            
+
             # Create test
             ab_test = db.create_ab_test(user_id, name, original_prompt, variant_a, variant_b)
             return ab_test
         except Exception as e:
             logger.error(f"Error creating A/B test: {str(e)}")
             return None
-    
+
     def get_variant(self, ab_test_id: int) -> str:
         """
         Get a variant for testing (randomly selects A or B).
@@ -82,17 +82,17 @@ class ABTesting:
             db_session = db.get_session()
             ab_test = db_session.query(ABTest).filter(ABTest.id == ab_test_id).first()
             db_session.close()
-            
+
             if not ab_test:
                 raise ValueError(f"A/B test {ab_test_id} not found")
-            
+
             # Randomly select variant (50/50 split)
             variant = random.choice(['a', 'b'])
             return variant
         except Exception as e:
             logger.error(f"Error getting variant: {str(e)}")
             return 'a'  # Default to variant A
-    
+
     def record_result(
         self,
         ab_test_id: int,
@@ -116,7 +116,7 @@ class ABTesting:
         except Exception as e:
             logger.error(f"Error recording A/B test result: {str(e)}")
             return False
-    
+
     def get_test_results(self, ab_test_id: int) -> Optional[Dict[str, Any]]:
         """
         Get A/B test results and statistics.
@@ -131,15 +131,15 @@ class ABTesting:
             db_session = db.get_session()
             ab_test = db_session.query(ABTest).filter(ABTest.id == ab_test_id).first()
             db_session.close()
-            
+
             if not ab_test:
                 return None
-            
+
             variant_a_score = ab_test.variant_a_score or 0
             variant_b_score = ab_test.variant_b_score or 0
             variant_a_responses = ab_test.variant_a_responses
             variant_b_responses = ab_test.variant_b_responses
-            
+
             # Calculate winner
             winner = None
             if variant_a_responses > 0 and variant_b_responses > 0:
@@ -149,7 +149,7 @@ class ABTesting:
                     winner = 'b'
                 else:
                     winner = 'tie'
-            
+
             return {
                 "test_id": ab_test.id,
                 "name": ab_test.name,
@@ -171,7 +171,7 @@ class ABTesting:
         except Exception as e:
             logger.error(f"Error getting test results: {str(e)}")
             return None
-    
+
     def complete_test(self, ab_test_id: int) -> bool:
         """
         Mark an A/B test as completed.

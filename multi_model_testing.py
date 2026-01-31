@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 import httpx
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -75,17 +74,17 @@ class ComparisonResult:
 
 class MultiModelTester:
     """Test prompts across multiple AI models."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.model_configs: Dict[AIModel, ModelConfig] = {}
         self._init_default_configs()
-    
+
     def _init_default_configs(self):
         """Initialize default model configurations."""
         # Note: Users need to provide their own API keys
         import os
-        
+
         # Grok models
         xai_key = os.getenv("XAI_API_KEY", "")
         if xai_key:
@@ -103,7 +102,7 @@ class MultiModelTester:
                 cost_per_1k_input=0.10,
                 cost_per_1k_output=0.40
             )
-        
+
         # Claude models
         claude_key = os.getenv("ANTHROPIC_API_KEY", "")
         if claude_key:
@@ -128,7 +127,7 @@ class MultiModelTester:
                 cost_per_1k_input=0.80,
                 cost_per_1k_output=4.00
             )
-        
+
         # OpenAI models
         openai_key = os.getenv("OPENAI_API_KEY", "")
         if openai_key:
@@ -153,11 +152,11 @@ class MultiModelTester:
                 cost_per_1k_input=0.50,
                 cost_per_1k_output=1.50
             )
-    
+
     def add_model_config(self, config: ModelConfig):
         """Add or update a model configuration."""
         self.model_configs[config.model] = config
-    
+
     def test_prompt_across_models(
         self,
         prompt: str,
@@ -180,14 +179,14 @@ class MultiModelTester:
             ComparisonResult with responses from all models
         """
         self.logger.info(f"Testing prompt across {len(models)} models")
-        
+
         responses = []
-        
+
         for model in models:
             if model not in self.model_configs:
                 self.logger.warning(f"Model {model.value} not configured, skipping")
                 continue
-            
+
             try:
                 response = self._call_model(
                     model=model,
@@ -207,12 +206,12 @@ class MultiModelTester:
                     cost=0.0,
                     error=str(e)
                 ))
-        
+
         # Analyze results
         comparison_matrix = self._build_comparison_matrix(responses)
         winner = self._determine_winner(responses, comparison_matrix)
         recommendations = self._generate_recommendations(responses, comparison_matrix)
-        
+
         return ComparisonResult(
             prompt=prompt,
             responses=responses,
@@ -221,7 +220,7 @@ class MultiModelTester:
             recommendations=recommendations,
             timestamp=datetime.now().isoformat()
         )
-    
+
     def _call_model(
         self,
         model: AIModel,
@@ -232,13 +231,13 @@ class MultiModelTester:
     ) -> ModelResponse:
         """Call a specific model API."""
         config = self.model_configs[model]
-        
+
         # Override config if specified
         temp = temperature if temperature is not None else config.temperature
         tokens = max_tokens if max_tokens is not None else config.max_tokens
-        
+
         start_time = time.time()
-        
+
         try:
             if model.value.startswith("grok"):
                 response = self._call_grok(config, prompt, system_prompt, temp, tokens)
@@ -250,9 +249,9 @@ class MultiModelTester:
                 response = self._call_gemini(config, prompt, system_prompt, temp, tokens)
             else:
                 raise ValueError(f"Unsupported model: {model.value}")
-            
+
             latency = time.time() - start_time
-            
+
             # Calculate cost
             input_tokens = response["tokens_used"]["input"]
             output_tokens = response["tokens_used"]["output"]
@@ -260,7 +259,7 @@ class MultiModelTester:
                 (input_tokens / 1000 * config.cost_per_1k_input) +
                 (output_tokens / 1000 * config.cost_per_1k_output)
             )
-            
+
             return ModelResponse(
                 model=model,
                 content=response["content"],
@@ -272,7 +271,7 @@ class MultiModelTester:
         except Exception as e:
             latency = time.time() - start_time
             raise Exception(f"Error calling {model.value}: {str(e)}")
-    
+
     def _call_grok(
         self,
         config: ModelConfig,
@@ -286,19 +285,19 @@ class MultiModelTester:
             "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json"
         }
-        
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        
+
         data = {
             "model": config.model.value,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        
+
         with httpx.Client(timeout=60.0) as client:
             response = client.post(
                 f"{config.api_base}/chat/completions",
@@ -307,7 +306,7 @@ class MultiModelTester:
             )
             response.raise_for_status()
             result = response.json()
-        
+
         return {
             "content": result["choices"][0]["message"]["content"],
             "tokens_used": {
@@ -316,7 +315,7 @@ class MultiModelTester:
                 "total": result["usage"]["total_tokens"]
             }
         }
-    
+
     def _call_claude(
         self,
         config: ModelConfig,
@@ -331,17 +330,17 @@ class MultiModelTester:
             "anthropic-version": "2023-06-01",
             "Content-Type": "application/json"
         }
-        
+
         data = {
             "model": config.model.value,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        
+
         if system_prompt:
             data["system"] = system_prompt
-        
+
         with httpx.Client(timeout=60.0) as client:
             response = client.post(
                 f"{config.api_base}/messages",
@@ -350,7 +349,7 @@ class MultiModelTester:
             )
             response.raise_for_status()
             result = response.json()
-        
+
         return {
             "content": result["content"][0]["text"],
             "tokens_used": {
@@ -359,7 +358,7 @@ class MultiModelTester:
                 "total": result["usage"]["input_tokens"] + result["usage"]["output_tokens"]
             }
         }
-    
+
     def _call_openai(
         self,
         config: ModelConfig,
@@ -373,19 +372,19 @@ class MultiModelTester:
             "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json"
         }
-        
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        
+
         data = {
             "model": config.model.value,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        
+
         with httpx.Client(timeout=60.0) as client:
             response = client.post(
                 f"{config.api_base}/chat/completions",
@@ -394,7 +393,7 @@ class MultiModelTester:
             )
             response.raise_for_status()
             result = response.json()
-        
+
         return {
             "content": result["choices"][0]["message"]["content"],
             "tokens_used": {
@@ -403,7 +402,7 @@ class MultiModelTester:
                 "total": result["usage"]["total_tokens"]
             }
         }
-    
+
     def _call_gemini(
         self,
         config: ModelConfig,
@@ -416,11 +415,11 @@ class MultiModelTester:
         # Gemini API implementation
         # Note: This is a simplified version
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-        
+
         headers = {
             "Content-Type": "application/json"
         }
-        
+
         data = {
             "contents": [{
                 "parts": [{"text": full_prompt}]
@@ -430,7 +429,7 @@ class MultiModelTester:
                 "maxOutputTokens": max_tokens
             }
         }
-        
+
         with httpx.Client(timeout=60.0) as client:
             response = client.post(
                 f"https://generativelanguage.googleapis.com/v1/models/{config.model.value}:generateContent?key={config.api_key}",
@@ -439,13 +438,13 @@ class MultiModelTester:
             )
             response.raise_for_status()
             result = response.json()
-        
+
         content = result["candidates"][0]["content"]["parts"][0]["text"]
-        
+
         # Estimate tokens (Gemini doesn't always provide exact counts)
         input_tokens = len(full_prompt.split()) * 1.3  # Rough estimate
         output_tokens = len(content.split()) * 1.3
-        
+
         return {
             "content": content,
             "tokens_used": {
@@ -454,18 +453,18 @@ class MultiModelTester:
                 "total": int(input_tokens + output_tokens)
             }
         }
-    
+
     def _build_comparison_matrix(self, responses: List[ModelResponse]) -> Dict[str, Any]:
         """Build a comparison matrix of model performance."""
         if not responses:
             return {}
-        
+
         # Filter out errors
         valid_responses = [r for r in responses if not r.error]
-        
+
         if not valid_responses:
             return {"error": "All models failed"}
-        
+
         return {
             "latency": {
                 "fastest": min(valid_responses, key=lambda r: r.latency),
@@ -489,7 +488,7 @@ class MultiModelTester:
                 "average": sum(len(r.content) for r in valid_responses) / len(valid_responses)
             }
         }
-    
+
     def _determine_winner(
         self,
         responses: List[ModelResponse],
@@ -497,16 +496,16 @@ class MultiModelTester:
     ) -> Optional[AIModel]:
         """Determine the best model based on multiple factors."""
         valid_responses = [r for r in responses if not r.error]
-        
+
         if not valid_responses:
             return None
-        
+
         # Score each model
         scores = {}
-        
+
         for response in valid_responses:
             score = 0
-            
+
             # Speed (30% weight)
             if response.latency == comparison_matrix["latency"]["fastest"].latency:
                 score += 30
@@ -514,14 +513,14 @@ class MultiModelTester:
                 # Proportional score
                 fastest = comparison_matrix["latency"]["fastest"].latency
                 score += 30 * (fastest / response.latency)
-            
+
             # Cost (30% weight)
             if response.cost == comparison_matrix["cost"]["cheapest"].cost:
                 score += 30
             else:
                 cheapest = comparison_matrix["cost"]["cheapest"].cost
                 score += 30 * (cheapest / response.cost) if response.cost > 0 else 30
-            
+
             # Output quality (40% weight) - based on length and completeness
             # Longer outputs generally indicate more detail
             if len(response.content) == len(comparison_matrix["output_length"]["longest"].content):
@@ -529,13 +528,13 @@ class MultiModelTester:
             else:
                 longest = len(comparison_matrix["output_length"]["longest"].content)
                 score += 40 * (len(response.content) / longest) if longest > 0 else 20
-            
+
             scores[response.model] = score
-        
+
         # Return model with highest score
         winner = max(scores.items(), key=lambda x: x[1])
         return winner[0]
-    
+
     def _generate_recommendations(
         self,
         responses: List[ModelResponse],
@@ -543,35 +542,35 @@ class MultiModelTester:
     ) -> List[str]:
         """Generate recommendations based on comparison."""
         recommendations = []
-        
+
         valid_responses = [r for r in responses if not r.error]
-        
+
         if not valid_responses:
             return ["All models failed. Check API keys and connectivity."]
-        
+
         # Speed recommendation
         fastest = comparison_matrix["latency"]["fastest"]
         recommendations.append(
             f"🚀 Fastest: {fastest.model.value} ({fastest.latency:.2f}s)"
         )
-        
+
         # Cost recommendation
         cheapest = comparison_matrix["cost"]["cheapest"]
         recommendations.append(
             f"💰 Most Cost-Effective: {cheapest.model.value} (${cheapest.cost:.4f})"
         )
-        
+
         # Quality recommendation (based on output length as proxy)
         longest = comparison_matrix["output_length"]["longest"]
         recommendations.append(
             f"📝 Most Detailed: {longest.model.value} ({len(longest.content)} chars)"
         )
-        
+
         # Overall recommendation
         if comparison_matrix.get("latency") and comparison_matrix.get("cost"):
             avg_latency = comparison_matrix["latency"]["average"]
             avg_cost = comparison_matrix["cost"]["average"]
-            
+
             # Find balanced model (good speed and cost)
             balanced = min(
                 valid_responses,
@@ -583,9 +582,9 @@ class MultiModelTester:
             recommendations.append(
                 f"⚖️ Best Balance: {balanced.model.value}"
             )
-        
+
         return recommendations
-    
+
     def benchmark_models(
         self,
         test_prompts: List[str],
@@ -604,7 +603,7 @@ class MultiModelTester:
             Comprehensive benchmark results
         """
         self.logger.info(f"Benchmarking {len(models)} models with {len(test_prompts)} prompts, {iterations} iterations each")
-        
+
         results = {
             "models": [m.value for m in models],
             "prompts_tested": len(test_prompts),
@@ -613,7 +612,7 @@ class MultiModelTester:
             "model_stats": {},
             "detailed_results": []
         }
-        
+
         # Initialize stats for each model
         for model in models:
             results["model_stats"][model.value] = {
@@ -626,27 +625,27 @@ class MultiModelTester:
                 "avg_cost": 0.0,
                 "avg_tokens": 0
             }
-        
+
         # Run tests
         for prompt_idx, prompt in enumerate(test_prompts):
             for iteration in range(iterations):
                 self.logger.info(f"Testing prompt {prompt_idx + 1}/{len(test_prompts)}, iteration {iteration + 1}/{iterations}")
-                
+
                 comparison = self.test_prompt_across_models(
                     prompt=prompt,
                     models=models
                 )
-                
+
                 results["detailed_results"].append({
                     "prompt_index": prompt_idx,
                     "iteration": iteration,
                     "comparison": comparison
                 })
-                
+
                 # Update stats
                 for response in comparison.responses:
                     stats = results["model_stats"][response.model.value]
-                    
+
                     if response.error:
                         stats["error_count"] += 1
                     else:
@@ -654,56 +653,56 @@ class MultiModelTester:
                         stats["total_latency"] += response.latency
                         stats["total_cost"] += response.cost
                         stats["total_tokens"] += response.tokens_used["total"]
-        
+
         # Calculate averages
         for model_name, stats in results["model_stats"].items():
             if stats["success_count"] > 0:
                 stats["avg_latency"] = stats["total_latency"] / stats["success_count"]
                 stats["avg_cost"] = stats["total_cost"] / stats["success_count"]
                 stats["avg_tokens"] = stats["total_tokens"] / stats["success_count"]
-        
+
         # Generate summary
         results["summary"] = self._generate_benchmark_summary(results)
-        
+
         return results
-    
+
     def _generate_benchmark_summary(self, results: Dict[str, Any]) -> str:
         """Generate a summary of benchmark results."""
         summary_parts = [
-            f"Benchmark Results:",
+            "Benchmark Results:",
             f"Total Tests: {results['total_tests']}",
             f"Models Tested: {len(results['models'])}",
             ""
         ]
-        
+
         # Sort models by average latency
         sorted_by_speed = sorted(
             results["model_stats"].items(),
             key=lambda x: x[1]["avg_latency"] if x[1]["success_count"] > 0 else float('inf')
         )
-        
+
         summary_parts.append("Speed Rankings:")
         for rank, (model, stats) in enumerate(sorted_by_speed, 1):
             if stats["success_count"] > 0:
                 summary_parts.append(
                     f"{rank}. {model}: {stats['avg_latency']:.2f}s avg"
                 )
-        
+
         summary_parts.append("")
-        
+
         # Sort by cost
         sorted_by_cost = sorted(
             results["model_stats"].items(),
             key=lambda x: x[1]["avg_cost"] if x[1]["success_count"] > 0 else float('inf')
         )
-        
+
         summary_parts.append("Cost Rankings:")
         for rank, (model, stats) in enumerate(sorted_by_cost, 1):
             if stats["success_count"] > 0:
                 summary_parts.append(
                     f"{rank}. {model}: ${stats['avg_cost']:.4f} avg"
                 )
-        
+
         return "\n".join(summary_parts)
 
 
@@ -725,14 +724,14 @@ def compare_models(
         ComparisonResult
     """
     tester = MultiModelTester()
-    
+
     # Convert string model names to enums
     if models is None:
         # Default to available models
         model_enums = [m for m in AIModel if m in tester.model_configs]
     else:
         model_enums = [AIModel(m) for m in models]
-    
+
     return tester.test_prompt_across_models(
         prompt=prompt,
         models=model_enums,

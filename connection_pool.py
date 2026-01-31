@@ -20,10 +20,10 @@ class ConnectionPoolManager:
     - Timeout management
     - Connection limits
     """
-    
+
     _instance = None
     _lock = Lock()
-    
+
     def __new__(cls):
         """Singleton pattern for global connection pool."""
         if cls._instance is None:
@@ -32,19 +32,19 @@ class ConnectionPoolManager:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         """Initialize connection pool manager."""
         if self._initialized:
             return
-        
+
         # Connection pool settings
         self.limits = httpx.Limits(
             max_keepalive_connections=20,  # Keep 20 connections alive
             max_connections=100,  # Max 100 total connections
             keepalive_expiry=30.0  # Keep connections alive for 30s
         )
-        
+
         # Timeout settings
         self.timeout = httpx.Timeout(
             connect=10.0,  # 10s to establish connection
@@ -52,19 +52,19 @@ class ConnectionPoolManager:
             write=10.0,  # 10s to write request
             pool=5.0  # 5s to get connection from pool
         )
-        
+
         # Transport with retry
         self.transport = httpx.HTTPTransport(
             limits=self.limits,
             retries=3  # Retry failed connections 3 times
         )
-        
+
         # Create client
         self._client: Optional[httpx.Client] = None
         self._initialized = True
-        
+
         logger.info("Connection pool manager initialized with 20 keepalive connections")
-    
+
     def get_client(self) -> httpx.Client:
         """
         Get or create HTTP client with connection pooling.
@@ -84,15 +84,15 @@ class ConnectionPoolManager:
                         follow_redirects=True
                     )
                     logger.info("Created new HTTP client with connection pooling")
-        
+
         return self._client
-    
+
     def close(self):
         """Close the connection pool."""
         if self._client and not self._client.is_closed:
             self._client.close()
             logger.info("Connection pool closed")
-    
+
     def __del__(self):
         """Cleanup on deletion."""
         self.close()

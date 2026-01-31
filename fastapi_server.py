@@ -140,7 +140,7 @@ async def optimize_prompt(
                 original_prompt=request.prompt,
                 error=validation_error
             )
-        
+
         is_valid_type, prompt_type_enum, type_error = validate_prompt_type(request.prompt_type)
         if not is_valid_type:
             return OptimizeResponse(
@@ -148,21 +148,21 @@ async def optimize_prompt(
                 original_prompt=request.prompt,
                 error=type_error
             )
-        
+
         # Beta mode: No usage limits
         # if not db.check_usage_limit(user.id if user else None):
         #     raise HTTPException(
         #         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         #         detail="Daily usage limit exceeded"
         #     )
-        
+
         # Optimize
         orchestrator = OrchestratorAgent()
         results = orchestrator.optimize_prompt(sanitized_prompt, prompt_type_enum)
-        
+
         # Beta mode: Don't track usage
         # db.increment_usage(user.id if user else None)
-        
+
         # Save session (optional in beta)
         try:
             db.save_session(
@@ -175,7 +175,7 @@ async def optimize_prompt(
             )
         except Exception:
             pass  # Optional in beta mode
-        
+
         return OptimizeResponse(
             success=True,
             original_prompt=sanitized_prompt,
@@ -212,13 +212,13 @@ async def batch_optimize(
             user.id if user else None,
             request.name
         )
-        
+
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create batch job"
             )
-        
+
         return BatchOptimizeResponse(
             job_id=job.id,
             status=job.status,
@@ -243,16 +243,16 @@ async def get_batch_job(job_id: int, user: Optional[User] = Depends(get_current_
             query = query.filter(BatchJob.user_id == user.id)
         job = query.first()
         db_session.close()
-        
+
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Batch job not found"
             )
-        
+
         import json
         results = json.loads(job.results_json) if job.results_json else None
-        
+
         return {
             "job_id": job.id,
             "name": job.name,
@@ -287,13 +287,13 @@ async def create_ab_test(
             request.variant_a,
             request.variant_b
         )
-        
+
         if not ab_test:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create A/B test"
             )
-        
+
         return {
             "test_id": ab_test.id,
             "name": ab_test.name,
@@ -313,13 +313,13 @@ async def get_ab_test_results(test_id: int, user: Optional[User] = Depends(get_c
     try:
         ab_testing = ABTesting()
         results = ab_testing.get_test_results(test_id)
-        
+
         if not results:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="A/B test not found"
             )
-        
+
         return results
     except Exception as e:
         logger.error(f"Error getting A/B test results: {str(e)}")
