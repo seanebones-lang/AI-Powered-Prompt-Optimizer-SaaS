@@ -103,7 +103,7 @@ class PromptType(str, Enum):
     AGENT_PERSONA = "agent_persona"
     TOOL_DEFINITION = "tool_definition"
     MULTI_AGENT_WORKFLOW = "multi_agent_workflow"
-    
+
     # Build Planning
     REQUEST_BUILD = "request_build"
     BUILD_PLAN = "build_plan"
@@ -111,17 +111,17 @@ class PromptType(str, Enum):
     API_DESIGN = "api_design"
     DEPLOYMENT_OPTIONS = "deployment_options"
     SYSTEM_IMPROVEMENT = "system_improvement"
-    
+
     # Code & Technical
     CODE_GENERATION = "code_generation"
     CODE_REVIEW = "code_review"
     DOCUMENTATION = "documentation"
-    
+
     # Reasoning Modes
     CHAIN_OF_THOUGHT = "chain_of_thought"
     TREE_OF_THOUGHT = "tree_of_thought"
     REFLECTION = "reflection"
-    
+
     # General/Fallback
     GENERAL = "general"
     CREATIVE = "creative"
@@ -197,13 +197,13 @@ class BaseAgent:
                 raise Exception(f"API returned non-dict response: {type(response)} - {str(response)[:200]}")
 
             execution_time_ms = (time.time() - start_time) * 1000
-            
+
             # Safely extract usage data
             usage_data = response.get("usage", {})
             if not isinstance(usage_data, dict):
                 usage_data = {}
             tokens_used = usage_data.get("total_tokens", 0) or 0
-            
+
             # Safely extract content
             content = response.get("content", "")
             if not isinstance(content, str):
@@ -473,7 +473,7 @@ class AgentWorkflow:
     Workflow manager for coordinating agent tasks.
     Supports parallel execution, conditional routing, and error handling.
     """
-    
+
     def __init__(self, agents: Dict[str, Any]):
         """
         Initialize workflow with agents.
@@ -483,7 +483,7 @@ class AgentWorkflow:
         """
         self.agents = agents
         self.max_workers = 3  # Maximum parallel workers
-    
+
     def run_parallel(
         self,
         tasks: List[Dict[str, Any]],
@@ -500,7 +500,7 @@ class AgentWorkflow:
             List of results in order of completion
         """
         results = []
-        
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tasks
             future_to_task = {}
@@ -510,10 +510,10 @@ class AgentWorkflow:
                 func = task.get('func', agent.process)
                 args = task.get('args', [])
                 kwargs = task.get('kwargs', {})
-                
+
                 future = executor.submit(self._execute_with_retry, func, *args, **kwargs)
                 future_to_task[future] = task
-            
+
             # Collect results as they complete
             for future in as_completed(future_to_task, timeout=timeout):
                 task = future_to_task[future]
@@ -532,9 +532,9 @@ class AgentWorkflow:
                         'success': False,
                         'error': str(e)
                     })
-        
+
         return results
-    
+
     def _execute_with_retry(
         self,
         func: Callable,
@@ -560,7 +560,7 @@ class AgentWorkflow:
             Exception: If all retries fail
         """
         last_exception = None
-        
+
         for attempt in range(max_retries):
             try:
                 return func(*args, **kwargs)
@@ -572,9 +572,9 @@ class AgentWorkflow:
                     time.sleep(wait_time)
                 else:
                     logger.error(f"All {max_retries} attempts failed: {str(e)}")
-        
+
         raise last_exception
-    
+
     def should_use_parallel(self, prompt_type: PromptType, prompt_length: int) -> bool:
         """
         Determine if parallel execution should be used.
@@ -593,11 +593,11 @@ class AgentWorkflow:
 
 class ChainOfThoughtAgent(BaseAgent):
     """Agent responsible for guiding through a chain of thought process."""
-    
+
     name = "ChainOfThought"
     role = "Guide the user through a step-by-step reasoning process"
     default_temperature = 0.6
-    
+
     def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Process a prompt with chain of thought reasoning."""
         system_prompt = f"""As NextEleven AI's Chain of Thought specialist, your role is to guide the user through a step-by-step reasoning process to solve complex problems.
@@ -606,18 +606,18 @@ Focus on breaking down the problem into logical steps, explaining each step clea
 {self._get_prompt_type_context(prompt_type)}
 
 Provide a structured reasoning process in a clear, organized format."""
-        
+
         user_prompt = f"Guide me through solving this problem with a chain of thought approach:\n\n{prompt}"
-        
+
         return self._call_api(user_prompt, system_prompt)
 
 class TreeOfThoughtAgent(BaseAgent):
     """Agent responsible for exploring multiple reasoning paths."""
-    
+
     name = "TreeOfThought"
     role = "Explore multiple reasoning paths to find the best solution"
     default_temperature = 0.7
-    
+
     def process(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """Process a prompt with tree of thought reasoning."""
         system_prompt = f"""As NextEleven AI's Tree of Thought specialist, your role is to explore multiple reasoning paths to find the best solution to complex problems.
@@ -626,9 +626,9 @@ Focus on generating different approaches or hypotheses, evaluating their pros an
 {self._get_prompt_type_context(prompt_type)}
 
 Provide a comprehensive analysis of different thought paths in a clear, organized format."""
-        
+
         user_prompt = f"Explore different solutions to this problem using a tree of thought approach:\n\n{prompt}"
-        
+
         return self._call_api(user_prompt, system_prompt)
 
 class OrchestratorAgent:
@@ -637,38 +637,38 @@ class OrchestratorAgent:
     
     Enhanced with dynamic workflow routing, parallel execution, and retry logic.
     """
-    
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         from agent_config import AgentConfigManager
         self.config = config or AgentConfigManager.DEFAULT_CONFIG
-        
+
         self.name = "Orchestrator"
-        
+
         # Initialize agents with config
         self.deconstructor = DeconstructorAgent()
         self.deconstructor.default_temperature = self.config.get("deconstructor", {}).get("temperature", 0.4)
         self.deconstructor.default_max_tokens = self.config.get("deconstructor", {}).get("max_tokens", 4000)
-        
+
         self.diagnoser = DiagnoserAgent()
         self.diagnoser.default_temperature = self.config.get("diagnoser", {}).get("temperature", 0.4)
         self.diagnoser.default_max_tokens = self.config.get("diagnoser", {}).get("max_tokens", 4000)
-        
+
         self.designer = DesignerAgent()
         self.designer.default_temperature = self.config.get("designer", {}).get("temperature", 0.7)
         self.designer.default_max_tokens = self.config.get("designer", {}).get("max_tokens", 4000)
-        
+
         self.evaluator = EvaluatorAgent()
         self.evaluator.default_temperature = self.config.get("evaluator", {}).get("temperature", 0.3)
         self.evaluator.default_max_tokens = self.config.get("evaluator", {}).get("max_tokens", 4000)
-        
+
         self.chain_of_thought = ChainOfThoughtAgent()
         self.chain_of_thought.default_temperature = self.config.get("chain_of_thought", {}).get("temperature", 0.6)
         self.chain_of_thought.default_max_tokens = self.config.get("chain_of_thought", {}).get("max_tokens", 4000)
-        
+
         self.tree_of_thought = TreeOfThoughtAgent()
         self.tree_of_thought.default_temperature = self.config.get("tree_of_thought", {}).get("temperature", 0.7)
         self.tree_of_thought.default_max_tokens = self.config.get("tree_of_thought", {}).get("max_tokens", 4000)
-        
+
         # Initialize workflow manager
         self.agents_dict = {
             'deconstructor': self.deconstructor,
@@ -679,7 +679,7 @@ class OrchestratorAgent:
             'tree_of_thought': self.tree_of_thought
         }
         self.workflow = AgentWorkflow(self.agents_dict)
-    
+
     def optimize_prompt(
         self,
         prompt: str,
@@ -710,15 +710,15 @@ class OrchestratorAgent:
             "errors": [],
             "workflow_mode": "sequential"  # Will be updated if parallel
         }
-        
+
         try:
             # Determine if parallel execution should be used
             if use_parallel is None:
                 use_parallel = self.workflow.should_use_parallel(prompt_type, len(prompt))
-            
+
             results["workflow_mode"] = "parallel" if use_parallel else "sequential"
             logger.info(f"Using {results['workflow_mode']} workflow mode for {prompt_type.value} prompt")
-            
+
             # Phase 1: Deconstruct and Diagnose (can be parallel for complex prompts)
             if use_parallel and prompt_type in [PromptType.BUILD_AGENT, PromptType.REQUEST_BUILD]:
                 logger.info("Running deconstruction and diagnosis in parallel...")
@@ -738,7 +738,7 @@ class OrchestratorAgent:
                         'kwargs': {}
                     }
                 ])
-                
+
                 # Extract results
                 deconstruct_result = None
                 for pr in parallel_results:
@@ -747,14 +747,14 @@ class OrchestratorAgent:
                     elif pr['task'] == 'diagnose_preliminary' and pr['success']:
                         # Preliminary diagnosis can inform full diagnosis
                         pass
-                
+
                 if not deconstruct_result or not deconstruct_result.success:
                     # Fallback to sequential
                     logger.warning("Parallel execution failed, falling back to sequential")
                     deconstruct_result = self.deconstructor.process(prompt, prompt_type)
-                
+
                 results["deconstruction"] = deconstruct_result.content
-                
+
                 # Full diagnosis (needs deconstruction)
                 diagnose_result = self.diagnoser.process(
                     prompt,
@@ -764,26 +764,26 @@ class OrchestratorAgent:
             else:
                 # Sequential execution (default or for simple prompts)
                 logger.info("Running sequential workflow...")
-                
+
                 # Step 1: Deconstruct
                 deconstruct_result = self.deconstructor.process(prompt, prompt_type)
                 if not deconstruct_result.success:
                     results["errors"].extend(deconstruct_result.errors)
                     return results
                 results["deconstruction"] = deconstruct_result.content
-                
+
                 # Step 2: Diagnose
                 diagnose_result = self.diagnoser.process(
                     prompt,
                     deconstruct_result.content,
                     prompt_type
                 )
-            
+
             if not diagnose_result.success:
                 results["errors"].extend(diagnose_result.errors)
                 return results
             results["diagnosis"] = diagnose_result.content
-            
+
             # Phase 2: Design (always sequential as it needs both deconstruction and diagnosis)
             # This phase uses Collections RAG if enabled
             logger.info("Starting design phase with Collections RAG support...")
@@ -800,10 +800,10 @@ class OrchestratorAgent:
                     results["optimized_prompt"] = design_result.content[:1000]  # Show first 1000 chars
                     results["design_output"] = design_result.content
                 return results
-            
+
             # Extract the optimized prompt text first
             optimized_prompt_text = self._extract_optimized_prompt(design_result.content)
-            
+
             # Store both the full design output and the extracted prompt
             # Always ensure optimized_prompt has content - use design_result.content as fallback
             if optimized_prompt_text and len(optimized_prompt_text.strip()) > 10:
@@ -812,9 +812,9 @@ class OrchestratorAgent:
                 # If extraction failed, use the design content directly (it's better than nothing)
                 results["optimized_prompt"] = design_result.content
                 logger.warning("Prompt extraction returned empty, using full design output")
-            
+
             results["design_output"] = design_result.content  # Keep full output for debugging
-            
+
             # Phase 3: Generate sample output (with retry)
             logger.info("Generating sample output...")
             try:
@@ -829,7 +829,7 @@ class OrchestratorAgent:
                 logger.warning(f"Could not generate sample output after retries: {str(e)}")
                 results["sample_output"] = "Sample output generation failed."
                 results["errors"].append(f"Sample output error: {str(e)}")
-            
+
             # Phase 4: Evaluate (with retry)
             logger.info("Starting evaluation phase...")
             try:
@@ -848,13 +848,13 @@ class OrchestratorAgent:
             except Exception as e:
                 logger.warning(f"Evaluation failed after retries: {str(e)}")
                 results["errors"].append(f"Evaluation error: {str(e)}")
-            
+
         except Exception as e:
             logger.error(f"Orchestration error: {str(e)}")
             results["errors"].append(str(e))
-        
+
         return results
-    
+
     def _diagnose_preliminary(self, prompt: str, prompt_type: PromptType) -> AgentOutput:
         """
         Preliminary diagnosis that can run in parallel with deconstruction.
@@ -876,30 +876,30 @@ Identify obvious issues like:
 - Lack of specificity
             
 Keep it brief and actionable."""
-            
+
             user_prompt = f"Quick preliminary analysis of this prompt:\n\n{prompt}"
-            
+
             response = grok_api.generate_completion(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 temperature=0.4,
                 max_tokens=800  # Shorter for preliminary
             )
-            
+
             # Validate response is a dict
             if not isinstance(response, dict):
                 raise Exception(f"API returned non-dict response: {type(response)} - {str(response)[:200]}")
-            
+
             # Safely extract data
             content = response.get("content", "")
             if not isinstance(content, str):
                 content = str(content) if content else ""
-            
+
             usage_data = response.get("usage", {})
             if not isinstance(usage_data, dict):
                 usage_data = {}
             tokens_used = usage_data.get("total_tokens", 0) or 0
-            
+
             return AgentOutput(
                 success=True,
                 content=content,
@@ -912,14 +912,14 @@ Keep it brief and actionable."""
                 content="",
                 errors=[str(e)]
             )
-    
+
     def _extract_optimized_prompt(self, design_output: str) -> str:
         """Extract the optimized prompt text from designer output."""
         if not design_output or not isinstance(design_output, str):
             return ""
-        
+
         import re
-        
+
         # Strategy 1: Try to extract from markdown code blocks first (most reliable)
         code_block_pattern = r'```(?:text|prompt|markdown|python)?\s*\n(.*?)\n```'
         code_matches = re.findall(code_block_pattern, design_output, re.DOTALL)
@@ -933,7 +933,7 @@ Keep it brief and actionable."""
                     best_match = cleaned
             if best_match:
                 return best_match
-        
+
         # Strategy 2: Look for text between quotes
         quoted_pattern = r'["\']([^"\']{20,})["\']'
         quoted_matches = re.findall(quoted_pattern, design_output, re.DOTALL)
@@ -942,18 +942,18 @@ Keep it brief and actionable."""
             longest = max(quoted_matches, key=len)
             if len(longest) > 20:
                 return longest.strip()
-        
+
         # Strategy 3: Look for markers like "Optimized Prompt:" or "Here is the optimized prompt:"
         lines = design_output.split('\n')
         in_prompt = False
         prompt_lines = []
-        
+
         markers = [
-            "optimized prompt", "improved prompt", "refined prompt", 
+            "optimized prompt", "improved prompt", "refined prompt",
             "here is the", "the optimized version", "optimized version:",
             "final prompt", "enhanced prompt", "here's the", "below is"
         ]
-        
+
         for i, line in enumerate(lines):
             line_lower = line.lower().strip()
             # Check if this line contains a marker
@@ -982,7 +982,7 @@ Keep it brief and actionable."""
                 # Stop if we've collected enough (likely got the prompt)
                 if len(prompt_lines) > 30:  # Reasonable max lines for a prompt
                     break
-        
+
         if prompt_lines:
             result = '\n'.join(prompt_lines).strip()
             # Clean up common prefixes/suffixes
@@ -990,7 +990,7 @@ Keep it brief and actionable."""
             result = re.sub(r'^(here|below|the following)[\s\']*(is|are)[\s:]*', '', result, flags=re.IGNORECASE)
             if len(result) > 20:
                 return result
-        
+
         # Strategy 4: Return first substantial paragraph (50+ chars) that looks like a prompt
         paragraphs = [p.strip() for p in design_output.split('\n\n') if len(p.strip()) > 50]
         for para in paragraphs:
@@ -998,11 +998,11 @@ Keep it brief and actionable."""
             para_lower = para.lower()
             if not any(word in para_lower for word in ["explanation", "improvement", "change", "note", "summary"]):
                 return para
-        
+
         # Strategy 5: If we have paragraphs, return the first one anyway
         if paragraphs:
             return paragraphs[0]
-        
+
         # Last resort: return first 1500 chars (should contain the prompt)
         # But try to end at a sentence boundary
         text = design_output[:1500].strip()

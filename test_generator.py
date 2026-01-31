@@ -58,10 +58,10 @@ class TestSuite:
 
 class TestGenerator:
     """Generates comprehensive test suites for prompts and agents."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-    
+
     def generate_test_suite(
         self,
         prompt: str,
@@ -84,30 +84,30 @@ class TestGenerator:
             Complete TestSuite with multiple test cases
         """
         self.logger.info(f"Generating test suite for {prompt_type} prompt")
-        
+
         test_cases = []
-        
+
         # Generate different types of tests
         test_cases.extend(self._generate_happy_path_tests(prompt, prompt_type))
         test_cases.extend(self._generate_edge_case_tests(prompt, prompt_type))
         test_cases.extend(self._generate_error_handling_tests(prompt, prompt_type))
         test_cases.extend(self._generate_boundary_tests(prompt, prompt_type))
-        
+
         if agent_capabilities:
             test_cases.extend(self._generate_capability_tests(prompt, agent_capabilities))
-        
+
         if domain:
             test_cases.extend(self._generate_domain_specific_tests(prompt, domain))
-        
+
         if constraints:
             test_cases.extend(self._generate_constraint_tests(prompt, constraints))
-        
+
         # Add security tests
         test_cases.extend(self._generate_security_tests(prompt))
-        
+
         # Identify coverage areas
         coverage_areas = list(set([tc.test_type.value for tc in test_cases]))
-        
+
         suite = TestSuite(
             name=f"Test Suite for {prompt_type}",
             description=f"Comprehensive test suite covering {len(coverage_areas)} test categories",
@@ -115,9 +115,9 @@ class TestGenerator:
             coverage_areas=coverage_areas,
             total_tests=len(test_cases)
         )
-        
+
         return suite
-    
+
     def _generate_happy_path_tests(
         self,
         prompt: str,
@@ -146,7 +146,7 @@ Format as JSON array:
   }},
   ...
 ]"""
-        
+
         try:
             response = generate_completion(
                 prompt=generation_prompt,
@@ -154,9 +154,9 @@ Format as JSON array:
                 temperature=0.4,
                 max_tokens=2000
             )
-            
+
             test_data = json.loads(response["content"])
-            
+
             return [
                 TestCase(
                     name=tc["name"],
@@ -173,7 +173,7 @@ Format as JSON array:
         except Exception as e:
             self.logger.error(f"Error generating happy path tests: {str(e)}")
             return self._fallback_happy_path_tests(prompt_type)
-    
+
     def _fallback_happy_path_tests(self, prompt_type: str) -> List[TestCase]:
         """Fallback happy path tests if generation fails."""
         return [
@@ -192,7 +192,7 @@ Format as JSON array:
                 estimated_time=5.0
             )
         ]
-    
+
     def _generate_edge_case_tests(
         self,
         prompt: str,
@@ -214,7 +214,7 @@ Edge cases to consider:
 - Multiple interpretations possible
 
 Format as JSON array with name, input, expected_output, success_criteria."""
-        
+
         try:
             response = generate_completion(
                 prompt=generation_prompt,
@@ -222,9 +222,9 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 temperature=0.5,
                 max_tokens=2000
             )
-            
+
             test_data = json.loads(response["content"])
-            
+
             return [
                 TestCase(
                     name=tc["name"],
@@ -241,7 +241,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
         except Exception as e:
             self.logger.error(f"Error generating edge case tests: {str(e)}")
             return self._fallback_edge_case_tests()
-    
+
     def _fallback_edge_case_tests(self) -> List[TestCase]:
         """Fallback edge case tests."""
         return [
@@ -274,7 +274,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 estimated_time=10.0
             )
         ]
-    
+
     def _generate_error_handling_tests(
         self,
         prompt: str,
@@ -326,7 +326,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 estimated_time=5.0
             )
         ]
-    
+
     def _generate_boundary_tests(
         self,
         prompt: str,
@@ -363,7 +363,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 estimated_time=15.0
             )
         ]
-    
+
     def _generate_capability_tests(
         self,
         prompt: str,
@@ -371,7 +371,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
     ) -> List[TestCase]:
         """Generate tests for specific capabilities."""
         tests = []
-        
+
         for capability in capabilities[:5]:  # Test top 5 capabilities
             tests.append(TestCase(
                 name=f"Capability Test - {capability}",
@@ -387,9 +387,9 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 priority="high",
                 estimated_time=7.0
             ))
-        
+
         return tests
-    
+
     def _generate_domain_specific_tests(
         self,
         prompt: str,
@@ -430,9 +430,9 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 )
             ]
         }
-        
+
         return domain_tests.get(domain.lower(), [])
-    
+
     def _generate_constraint_tests(
         self,
         prompt: str,
@@ -440,7 +440,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
     ) -> List[TestCase]:
         """Generate tests for constraint adherence."""
         tests = []
-        
+
         for constraint in constraints[:3]:  # Test top 3 constraints
             tests.append(TestCase(
                 name=f"Constraint Test - {constraint[:50]}",
@@ -456,9 +456,9 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 priority="high",
                 estimated_time=7.0
             ))
-        
+
         return tests
-    
+
     def _generate_security_tests(self, prompt: str) -> List[TestCase]:
         """Generate security-focused test cases."""
         return [
@@ -491,7 +491,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 estimated_time=5.0
             )
         ]
-    
+
     def run_test_case(
         self,
         test_case: TestCase,
@@ -510,21 +510,21 @@ Format as JSON array with name, input, expected_output, success_criteria."""
             Test result with pass/fail and details
         """
         import time
-        
+
         start_time = time.time()
-        
+
         try:
             # Execute the test
             actual_output = agent_function(test_case.input_data)
             execution_time = time.time() - start_time
-            
+
             # Evaluate results
             passed, evaluation = self._evaluate_test_result(
                 test_case,
                 actual_output,
                 execution_time
             )
-            
+
             return {
                 "test_name": test_case.name,
                 "test_type": test_case.test_type.value,
@@ -545,7 +545,7 @@ Format as JSON array with name, input, expected_output, success_criteria."""
                 "evaluation": f"Test failed with exception: {str(e)}",
                 "timestamp": time.time()
             }
-    
+
     def _evaluate_test_result(
         self,
         test_case: TestCase,
@@ -555,21 +555,21 @@ Format as JSON array with name, input, expected_output, success_criteria."""
         """Evaluate if test case passed."""
         evaluation_parts = []
         passed = True
-        
+
         # Check execution time
         if execution_time > test_case.estimated_time * 2:
             evaluation_parts.append(f"⚠️ Slow execution: {execution_time:.2f}s (expected ~{test_case.estimated_time}s)")
             passed = False
         else:
             evaluation_parts.append(f"✓ Execution time acceptable: {execution_time:.2f}s")
-        
+
         # Check if output exists
         if not actual_output or len(actual_output.strip()) == 0:
             evaluation_parts.append("✗ No output generated")
             passed = False
         else:
             evaluation_parts.append("✓ Output generated")
-        
+
         # Use AI to evaluate against success criteria
         if passed and actual_output:
             ai_evaluation = self._ai_evaluate_output(
@@ -578,9 +578,9 @@ Format as JSON array with name, input, expected_output, success_criteria."""
             )
             evaluation_parts.append(ai_evaluation["evaluation"])
             passed = passed and ai_evaluation["passed"]
-        
+
         return passed, "\n".join(evaluation_parts)
-    
+
     def _ai_evaluate_output(
         self,
         test_case: TestCase,
@@ -605,7 +605,7 @@ Respond with:
 Format:
 PASS/FAIL
 Explanation here."""
-        
+
         try:
             response = generate_completion(
                 prompt=evaluation_prompt,
@@ -613,13 +613,13 @@ Explanation here."""
                 temperature=0.2,
                 max_tokens=300
             )
-            
+
             content = response["content"].strip()
             lines = content.split('\n')
-            
+
             passed = lines[0].strip().upper() == "PASS"
             explanation = "\n".join(lines[1:]).strip()
-            
+
             return {
                 "passed": passed,
                 "evaluation": explanation
@@ -630,7 +630,7 @@ Explanation here."""
                 "passed": True,  # Default to pass if evaluation fails
                 "evaluation": "Could not perform AI evaluation"
             }
-    
+
     def run_test_suite(
         self,
         suite: TestSuite,
@@ -662,18 +662,18 @@ Explanation here."""
             "test_results": [],
             "summary": ""
         }
-        
+
         for test_case in suite.test_cases:
             result = self.run_test_case(test_case, agent_function)
             results["test_results"].append(result)
             results["tests_run"] += 1
             results["total_time"] += result["execution_time"]
-            
+
             if result["passed"]:
                 results["tests_passed"] += 1
             else:
                 results["tests_failed"] += 1
-            
+
             # Save to database if requested
             if save_results and user_id:
                 db.save_test_case(
@@ -691,7 +691,7 @@ Explanation here."""
                         "execution_time": result["execution_time"]
                     }
                 )
-        
+
         # Generate summary
         pass_rate = (results["tests_passed"] / results["tests_run"] * 100) if results["tests_run"] > 0 else 0
         results["summary"] = f"""
@@ -702,7 +702,7 @@ Failed: {results["tests_failed"]}
 Total Time: {results["total_time"]:.2f}s
 Average Time: {results["total_time"] / results["tests_run"]:.2f}s per test
 """
-        
+
         return results
 
 

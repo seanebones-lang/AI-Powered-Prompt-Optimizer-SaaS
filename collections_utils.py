@@ -91,11 +91,11 @@ def get_collections_for_prompt_type(prompt_type: str) -> List[str]:
     """
     collections = []
     default_collections = get_default_collections()
-    
+
     # Always include general prompt examples
     if default_collections.get("prompt_examples"):
         collections.append(default_collections["prompt_examples"])
-    
+
     # Add type-specific collections
     prompt_type_lower = prompt_type.lower()
     if prompt_type_lower in ["marketing", "creative"]:
@@ -104,7 +104,7 @@ def get_collections_for_prompt_type(prompt_type: str) -> List[str]:
     elif prompt_type_lower in ["technical", "analytical"]:
         if default_collections.get("technical_prompts"):
             collections.append(default_collections["technical_prompts"])
-    
+
     return collections
 
 
@@ -124,13 +124,13 @@ def enable_collections_for_agent(
     """
     if not include_collections:
         return None
-    
+
     collection_ids = get_collections_for_prompt_type(prompt_type)
-    
+
     if not collection_ids:
         logger.warning("No collections configured for prompt type: %s", prompt_type)
         return None
-    
+
     tool = get_collections_search_tool(collection_ids)
     return [tool]
 
@@ -142,10 +142,10 @@ class CollectionsManager:
     Note: Collection creation and file uploads are typically done via xAI dashboard
     or direct API calls. This class provides helper methods for integration.
     """
-    
+
     def __init__(self):
         self.api = grok_api
-    
+
     def search_collections(
         self,
         query: str,
@@ -171,7 +171,7 @@ class CollectionsManager:
         # This would typically be done via Grok's tool calling
         # Direct API calls would use xAI's REST API endpoints
         logger.info(f"Collections search requested: {query} in {collection_ids}")
-        
+
         return {
             "query": query,
             "collection_ids": collection_ids,
@@ -179,7 +179,7 @@ class CollectionsManager:
             "search_type": search_type,
             "note": "Use Grok's tool calling for actual searches"
         }
-    
+
     def get_collection_info(self, collection_id: str) -> Optional[Dict[str, Any]]:
         """
         Get information about a collection.
@@ -209,7 +209,7 @@ def is_collections_enabled() -> bool:
     """
     if not getattr(settings, 'enable_collections', False):
         return False
-    
+
     default_collections = get_default_collections()
     return any(
         collection_id for collection_id in default_collections.values()

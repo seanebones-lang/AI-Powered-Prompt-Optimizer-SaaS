@@ -39,17 +39,17 @@ def sanitize_prompt(prompt: str) -> str:
     """
     if not prompt:
         return ""
-    
+
     # Strip leading/trailing whitespace
     sanitized = prompt.strip()
-    
+
     # Remove control characters (keep newlines \n, tabs \t, carriage returns \r)
     # This removes potentially harmful characters while preserving formatting
     sanitized = re.sub(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]', '', sanitized)
-    
+
     # Normalize multiple consecutive newlines (max 2 consecutive)
     sanitized = re.sub(r'\n{3,}', '\n\n', sanitized)
-    
+
     # Truncate to max length (preserve words, don't cut mid-word if possible)
     if len(sanitized) > MAX_PROMPT_LENGTH:
         truncated = sanitized[:MAX_PROMPT_LENGTH]
@@ -60,7 +60,7 @@ def sanitize_prompt(prompt: str) -> str:
         else:
             sanitized = truncated + "..."
         logger.warning(f"Prompt truncated from {len(prompt)} to {len(sanitized)} characters")
-    
+
     return sanitized
 
 
@@ -78,21 +78,21 @@ def validate_prompt(prompt: str) -> Tuple[bool, Optional[str]]:
     """
     if not prompt:
         return False, "Prompt cannot be empty"
-    
+
     if not isinstance(prompt, str):
         return False, "Prompt must be a string"
-    
+
     # Check length
     if len(prompt) < MIN_PROMPT_LENGTH:
         return False, f"Prompt must be at least {MIN_PROMPT_LENGTH} character(s)"
-    
+
     if len(prompt) > MAX_PROMPT_LENGTH:
         return False, f"Prompt must be no more than {MAX_PROMPT_LENGTH} characters"
-    
+
     # Check for only whitespace
     if not prompt.strip():
         return False, "Prompt cannot be only whitespace"
-    
+
     return True, None
 
 
@@ -111,7 +111,7 @@ def validate_prompt_type(prompt_type: str) -> Tuple[bool, Optional[PromptType], 
     """
     if not prompt_type:
         return False, None, "Prompt type is required"
-    
+
     try:
         prompt_type_enum = PromptType(prompt_type.lower())
         return True, prompt_type_enum, None
@@ -132,17 +132,17 @@ def validate_username(username: str) -> Tuple[bool, Optional[str]]:
     """
     if not username:
         return False, "Username cannot be empty"
-    
+
     if len(username) < 3:
         return False, "Username must be at least 3 characters"
-    
+
     if len(username) > MAX_USERNAME_LENGTH:
         return False, f"Username must be no more than {MAX_USERNAME_LENGTH} characters"
-    
+
     # Allow alphanumeric, underscores, hyphens
     if not re.match(r'^[a-zA-Z0-9_-]+$', username):
         return False, "Username can only contain letters, numbers, underscores, and hyphens"
-    
+
     return True, None
 
 
@@ -158,15 +158,15 @@ def validate_email(email: str) -> Tuple[bool, Optional[str]]:
     """
     if not email:
         return False, "Email cannot be empty"
-    
+
     if len(email) > MAX_EMAIL_LENGTH:
         return False, f"Email must be no more than {MAX_EMAIL_LENGTH} characters"
-    
+
     # Basic email regex (RFC 5322 simplified)
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
         return False, "Invalid email format"
-    
+
     return True, None
 
 
@@ -187,13 +187,13 @@ def sanitize_and_validate_prompt(prompt: str) -> Tuple[bool, Optional[str], Opti
     is_valid, error = validate_prompt(prompt)
     if not is_valid:
         return False, None, error
-    
+
     # Sanitize
     sanitized = sanitize_prompt(prompt)
-    
+
     # Validate again after sanitization (length might have changed)
     is_valid, error = validate_prompt(sanitized)
     if not is_valid:
         return False, None, error
-    
+
     return True, sanitized, None

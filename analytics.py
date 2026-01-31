@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class Analytics:
     """Analytics service for collecting and aggregating metrics."""
-    
+
     @staticmethod
     def get_user_analytics(user_id: Optional[int], days: int = 30) -> Dict:
         """
@@ -125,7 +125,7 @@ class Analytics:
             return {}
         finally:
             db_session.close()
-    
+
     @staticmethod
     def get_quality_trends(user_id: Optional[int], days: int = 30) -> List[Dict]:
         """
@@ -206,7 +206,7 @@ class Analytics:
             return []
         finally:
             db_session.close()
-    
+
     @staticmethod
     def log_event(user_id: Optional[int], event_type: str, event_data: Optional[Dict] = None):
         """Log an analytics event."""

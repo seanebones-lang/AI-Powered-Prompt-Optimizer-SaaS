@@ -45,7 +45,7 @@ class CircuitBreaker:
         def risky_operation():
             return api.call()
     """
-    
+
     def __init__(self, config: Optional[CircuitBreakerConfig] = None):
         """Initialize circuit breaker."""
         self.config = config or CircuitBreakerConfig()
@@ -54,10 +54,10 @@ class CircuitBreaker:
         self.success_count = 0
         self.last_failure_time = None
         self.lock = Lock()
-        
+
         logger.info(f"Circuit breaker initialized: threshold={self.config.failure_threshold}, "
                    f"timeout={self.config.timeout}s")
-    
+
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
         Execute function through circuit breaker.
@@ -84,56 +84,56 @@ class CircuitBreaker:
                         f"Circuit breaker is OPEN. Try again in "
                         f"{self._get_remaining_timeout():.1f}s"
                     )
-        
+
         try:
             result = func(*args, **kwargs)
             self._on_success()
             return result
-        except self.config.expected_exception as e:
+        except self.config.expected_exception:
             self._on_failure()
             raise
-    
+
     def _on_success(self):
         """Handle successful call."""
         with self.lock:
             self.failure_count = 0
-            
+
             if self.state == CircuitState.HALF_OPEN:
                 self.success_count += 1
                 if self.success_count >= self.config.success_threshold:
                     self.state = CircuitState.CLOSED
                     logger.info("Circuit breaker closed after successful recovery")
-    
+
     def _on_failure(self):
         """Handle failed call."""
         with self.lock:
             self.failure_count += 1
             self.last_failure_time = time.time()
-            
+
             if self.state == CircuitState.HALF_OPEN:
                 self.state = CircuitState.OPEN
                 logger.warning("Circuit breaker opened from HALF_OPEN after failure")
             elif self.failure_count >= self.config.failure_threshold:
                 self.state = CircuitState.OPEN
                 logger.warning(f"Circuit breaker opened after {self.failure_count} failures")
-    
+
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt reset."""
         if self.last_failure_time is None:
             return True
         return time.time() - self.last_failure_time >= self.config.timeout
-    
+
     def _get_remaining_timeout(self) -> float:
         """Get remaining timeout before retry."""
         if self.last_failure_time is None:
             return 0.0
         elapsed = time.time() - self.last_failure_time
         return max(0.0, self.config.timeout - elapsed)
-    
+
     def get_state(self) -> CircuitState:
         """Get current circuit state."""
         return self.state
-    
+
     def reset(self):
         """Manually reset circuit breaker."""
         with self.lock:
@@ -173,16 +173,16 @@ def circuit_breaker(
         expected_exception=expected_exception
     )
     breaker = CircuitBreaker(config)
-    
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             return breaker.call(func, *args, **kwargs)
-        
+
         # Attach breaker for inspection
         wrapper.circuit_breaker = breaker
         return wrapper
-    
+
     return decorator
 
 

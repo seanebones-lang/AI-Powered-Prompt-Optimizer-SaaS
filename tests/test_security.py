@@ -8,8 +8,6 @@ Tests for:
 - API key protection
 - Rate limiting
 """
-import pytest
-from unittest.mock import patch, MagicMock
 import os
 
 # Set test environment
@@ -203,7 +201,6 @@ class TestPasswordSecurity:
     def test_passwords_are_hashed(self, test_db_session):
         """Passwords should be hashed, not stored in plain text."""
         from database import Database
-        import bcrypt
 
         db = Database()
         user = db.create_user("hashtest@example.com", "hashtest", "mypassword")
@@ -315,7 +312,7 @@ class TestSessionSecurity:
 
     def test_session_data_not_leaked(self, test_db_session):
         """Session data should not include sensitive information."""
-        from database import Database, OptimizationSession
+        from database import Database
 
         db = Database()
         session = db.save_session(

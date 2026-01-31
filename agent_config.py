@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class AgentConfigManager:
     """Manages custom agent configurations for premium users."""
-    
+
     DEFAULT_CONFIG = {
         "temperature": 0.4,
         "max_tokens": 4000,
@@ -44,7 +44,7 @@ class AgentConfigManager:
         "use_parallel_execution": True,
         "enable_collections": False
     }
-    
+
     @staticmethod
     def create_config(
         user_id: int,
@@ -70,12 +70,12 @@ class AgentConfigManager:
             # Merge with defaults
             merged_config = AgentConfigManager.DEFAULT_CONFIG.copy()
             merged_config.update(config)
-            
+
             # Validate config
             if not AgentConfigManager._validate_config(merged_config):
                 logger.error("Invalid agent configuration")
                 return None
-            
+
             config_json = json.dumps(merged_config)
             return db.create_agent_config(
                 user_id,
@@ -87,7 +87,7 @@ class AgentConfigManager:
         except Exception as e:
             logger.error(f"Error creating agent config: {str(e)}")
             return None
-    
+
     @staticmethod
     def _validate_config(config: Dict[str, Any]) -> bool:
         """Validate agent configuration."""
@@ -95,19 +95,19 @@ class AgentConfigManager:
             # Check required fields
             if "temperature" not in config:
                 return False
-            
+
             # Validate temperature range
             if not (0.0 <= config["temperature"] <= 2.0):
                 return False
-            
+
             # Validate max_tokens
             if "max_tokens" in config and config["max_tokens"] < 1:
                 return False
-            
+
             return True
         except Exception:
             return False
-    
+
     @staticmethod
     def get_user_configs(user_id: int) -> list:
         """Get all agent configurations for a user."""
@@ -127,7 +127,7 @@ class AgentConfigManager:
         except Exception as e:
             logger.error(f"Error getting user configs: {str(e)}")
             return []
-    
+
     @staticmethod
     def get_default_config(user_id: int) -> Optional[Dict[str, Any]]:
         """Get default agent configuration for a user."""
@@ -139,7 +139,7 @@ class AgentConfigManager:
         except Exception as e:
             logger.error(f"Error getting default config: {str(e)}")
             return AgentConfigManager.DEFAULT_CONFIG
-    
+
     @staticmethod
     def apply_config_to_agent(
         orchestrator: OrchestratorAgent,

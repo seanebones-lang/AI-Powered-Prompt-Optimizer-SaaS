@@ -5,8 +5,6 @@ Tests the complete optimization workflow from input to output display.
 """
 import sys
 import os
-import time
-from typing import Dict, Any, Optional
 
 # Set test environment
 os.environ.setdefault("TESTING", "1")
@@ -17,10 +15,6 @@ def test_imports():
     """Test that all critical modules can be imported."""
     print("🔍 Testing imports...")
     try:
-        from agents import OrchestratorAgent, PromptType
-        from api_utils import grok_api
-        from enterprise_integration import enterprise_manager
-        from main import show_optimize_page
         print("  ✅ All imports successful")
         return True
     except Exception as e:
@@ -59,9 +53,9 @@ def test_prompt_extraction():
     print("🔍 Testing prompt extraction...")
     try:
         from agents import OrchestratorAgent
-        
+
         orchestrator = OrchestratorAgent()
-        
+
         # Test case 1: Code block extraction
         test_output1 = """
 Here is the optimized prompt:
@@ -74,7 +68,7 @@ You are a helpful assistant that provides clear and concise answers.
         assert len(extracted1) > 10, "Extraction too short"
         assert "helpful assistant" in extracted1.lower()
         print("  ✅ Code block extraction works")
-        
+
         # Test case 2: Marker-based extraction
         test_output2 = """
 Optimized Prompt:
@@ -83,13 +77,13 @@ You are an expert in AI and machine learning. Provide detailed explanations.
         extracted2 = orchestrator._extract_optimized_prompt(test_output2)
         assert len(extracted2) > 10, "Extraction too short"
         print("  ✅ Marker-based extraction works")
-        
+
         # Test case 3: Fallback
         test_output3 = "This is a simple prompt without markers."
         extracted3 = orchestrator._extract_optimized_prompt(test_output3)
         assert len(extracted3) > 0, "Fallback should return something"
         print("  ✅ Fallback extraction works")
-        
+
         return True
     except Exception as e:
         print(f"  ❌ Prompt extraction test failed: {str(e)}")
@@ -99,8 +93,7 @@ def test_result_structure():
     """Test that optimization results have correct structure."""
     print("🔍 Testing result structure...")
     try:
-        from agents import OrchestratorAgent, PromptType
-        
+
         # Create a mock result structure
         result = {
             "original_prompt": "Test prompt",
@@ -114,12 +107,12 @@ def test_result_structure():
             "errors": [],
             "workflow_mode": "sequential"
         }
-        
+
         # Verify all expected keys exist
         required_keys = ["original_prompt", "optimized_prompt", "errors", "workflow_mode"]
         for key in required_keys:
             assert key in result, f"Missing key: {key}"
-        
+
         print("  ✅ Result structure is correct")
         return True
     except Exception as e:
@@ -132,24 +125,24 @@ def test_input_validation():
     try:
         from input_validation import sanitize_and_validate_prompt, validate_prompt_type
         from agents import PromptType
-        
+
         # Test valid prompt
         is_valid, sanitized, error = sanitize_and_validate_prompt("This is a test prompt")
         assert is_valid, "Valid prompt should pass"
         assert sanitized is not None, "Should return sanitized prompt"
         print("  ✅ Valid prompt validation works")
-        
+
         # Test invalid prompt (empty)
         is_valid, sanitized, error = sanitize_and_validate_prompt("")
         assert not is_valid, "Empty prompt should fail"
         print("  ✅ Empty prompt validation works")
-        
+
         # Test prompt type validation
         is_valid, prompt_type, error = validate_prompt_type("general")
         assert is_valid, "Valid prompt type should pass"
         assert prompt_type == PromptType.GENERAL, "Should return correct enum"
         print("  ✅ Prompt type validation works")
-        
+
         return True
     except Exception as e:
         print(f"  ❌ Input validation test failed: {str(e)}")
@@ -159,8 +152,8 @@ def test_error_handling():
     """Test error handling in agents."""
     print("🔍 Testing error handling...")
     try:
-        from agents import BaseAgent, AgentOutput
-        
+        from agents import AgentOutput
+
         # Test that AgentOutput handles errors correctly
         error_output = AgentOutput(
             success=False,
@@ -168,11 +161,11 @@ def test_error_handling():
             errors=["Test error"],
             metadata={}
         )
-        
+
         assert not error_output.success, "Should mark as unsuccessful"
         assert len(error_output.errors) > 0, "Should have errors"
         print("  ✅ Error handling structure correct")
-        
+
         return True
     except Exception as e:
         print(f"  ❌ Error handling test failed: {str(e)}")
@@ -198,7 +191,7 @@ def run_all_tests():
     print("🧪 End-to-End Test Suite")
     print("=" * 60)
     print("")
-    
+
     tests = [
         ("Imports", test_imports),
         ("API Client", test_api_client),
@@ -209,7 +202,7 @@ def run_all_tests():
         ("Error Handling", test_error_handling),
         ("UI Structure", test_ui_structure),
     ]
-    
+
     results = []
     for test_name, test_func in tests:
         try:
@@ -219,22 +212,22 @@ def run_all_tests():
             print(f"  ❌ {test_name} crashed: {str(e)}")
             results.append((test_name, False))
         print("")
-    
+
     # Summary
     print("=" * 60)
     print("📊 Test Summary")
     print("=" * 60)
-    
+
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for test_name, result in results:
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"  {status}: {test_name}")
-    
+
     print("")
     print(f"Results: {passed}/{total} tests passed")
-    
+
     if passed == total:
         print("✅ ALL TESTS PASSED!")
         return 0

@@ -65,11 +65,11 @@ class SecurityScanResult:
 
 class SecurityScanner:
     """Scans prompts and configurations for security issues."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self._init_patterns()
-    
+
     def _init_patterns(self):
         """Initialize detection patterns."""
         # Prompt injection patterns
@@ -85,7 +85,7 @@ class SecurityScanner:
             r"show\s+(your|the)\s+(system\s+)?prompt",
             r"what\s+(are|is)\s+your\s+instructions",
         ]
-        
+
         # Jailbreak patterns
         self.jailbreak_patterns = [
             r"DAN\s+mode",
@@ -97,7 +97,7 @@ class SecurityScanner:
             r"roleplay\s+as\s+an?\s+unfiltered",
             r"ignore\s+your\s+(ethics|safety|guidelines)",
         ]
-        
+
         # PII patterns
         self.pii_patterns = {
             "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
@@ -106,7 +106,7 @@ class SecurityScanner:
             "credit_card": r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b",
             "ip_address": r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
         }
-        
+
         # System prompt leak patterns
         self.leak_patterns = [
             r"print\s+(your|the)\s+system\s+prompt",
@@ -114,7 +114,7 @@ class SecurityScanner:
             r"repeat\s+(your|the)\s+system",
             r"echo\s+system",
         ]
-    
+
     def scan_prompt(
         self,
         prompt: str,
@@ -133,31 +133,31 @@ class SecurityScanner:
             SecurityScanResult with all findings
         """
         self.logger.info("Starting security scan")
-        
+
         issues = []
         warnings = []
-        
+
         # Check for prompt injection
         injection_issues = self._check_prompt_injection(prompt)
         issues.extend(injection_issues)
-        
+
         # Check for jailbreak attempts
         jailbreak_issues = self._check_jailbreak_attempts(prompt)
         issues.extend(jailbreak_issues)
-        
+
         # Check for PII exposure
         pii_issues = self._check_pii_exposure(prompt)
         issues.extend(pii_issues)
-        
+
         # Check for system prompt leaks
         leak_issues = self._check_system_prompt_leaks(prompt)
         issues.extend(leak_issues)
-        
+
         # Check context if provided
         if context:
             context_issues = self._check_context_security(context)
             issues.extend(context_issues)
-        
+
         # Check compliance if specified
         compliance_status = {}
         if check_compliance:
@@ -165,17 +165,17 @@ class SecurityScanner:
                 compliance_issues, compliant = self._check_compliance(prompt, standard)
                 issues.extend(compliance_issues)
                 compliance_status[standard] = compliant
-        
+
         # Calculate security score
         score = self._calculate_security_score(issues)
-        
+
         # Generate recommendations
         recommendations = self._generate_recommendations(issues)
-        
+
         # Determine if passed
         critical_issues = [i for i in issues if i.severity == SecurityLevel.CRITICAL]
         passed = len(critical_issues) == 0 and score >= 70
-        
+
         return SecurityScanResult(
             passed=passed,
             score=score,
@@ -184,12 +184,12 @@ class SecurityScanner:
             recommendations=recommendations,
             compliance_status=compliance_status
         )
-    
+
     def _check_prompt_injection(self, prompt: str) -> List[SecurityIssue]:
         """Check for prompt injection attempts."""
         issues = []
         prompt_lower = prompt.lower()
-        
+
         for pattern in self.injection_patterns:
             matches = re.finditer(pattern, prompt_lower, re.IGNORECASE)
             for match in matches:
@@ -203,14 +203,14 @@ class SecurityScanner:
                     recommendation="Remove or rephrase the suspicious content. Validate and sanitize all user inputs.",
                     cve_reference="CWE-77: Command Injection"
                 ))
-        
+
         return issues
-    
+
     def _check_jailbreak_attempts(self, prompt: str) -> List[SecurityIssue]:
         """Check for jailbreak attempts."""
         issues = []
         prompt_lower = prompt.lower()
-        
+
         for pattern in self.jailbreak_patterns:
             matches = re.finditer(pattern, prompt_lower, re.IGNORECASE)
             for match in matches:
@@ -223,13 +223,13 @@ class SecurityScanner:
                     evidence=match.group(),
                     recommendation="Reject prompts attempting to bypass safety guidelines. Implement content filtering."
                 ))
-        
+
         return issues
-    
+
     def _check_pii_exposure(self, prompt: str) -> List[SecurityIssue]:
         """Check for PII exposure."""
         issues = []
-        
+
         for pii_type, pattern in self.pii_patterns.items():
             matches = re.finditer(pattern, prompt)
             for match in matches:
@@ -244,9 +244,9 @@ class SecurityScanner:
                         evidence="[REDACTED]",  # Don't expose PII in logs
                         recommendation=f"Remove or anonymize {pii_type.replace('_', ' ')}. Use placeholder values for examples."
                     ))
-        
+
         return issues
-    
+
     def _validate_pii_match(self, pii_type: str, value: str) -> bool:
         """Validate if a PII match is likely real."""
         # Reduce false positives
@@ -262,14 +262,14 @@ class SecurityScanner:
             # Basic Luhn algorithm check
             digits = re.sub(r'\D', '', value)
             return len(digits) == 16
-        
+
         return True  # Default to true for other types
-    
+
     def _check_system_prompt_leaks(self, prompt: str) -> List[SecurityIssue]:
         """Check for attempts to leak system prompts."""
         issues = []
         prompt_lower = prompt.lower()
-        
+
         for pattern in self.leak_patterns:
             matches = re.finditer(pattern, prompt_lower, re.IGNORECASE)
             for match in matches:
@@ -282,19 +282,19 @@ class SecurityScanner:
                     evidence=match.group(),
                     recommendation="Implement safeguards to prevent system prompt disclosure. Filter requests for system information."
                 ))
-        
+
         return issues
-    
+
     def _check_context_security(self, context: str) -> List[SecurityIssue]:
         """Check security of context/system prompt."""
         issues = []
-        
+
         # Check if system prompt contains sensitive info
         sensitive_keywords = [
             "api key", "password", "secret", "token", "credential",
             "private key", "access key"
         ]
-        
+
         context_lower = context.lower()
         for keyword in sensitive_keywords:
             if keyword in context_lower:
@@ -307,7 +307,7 @@ class SecurityScanner:
                     evidence="[REDACTED]",
                     recommendation="Never include credentials in prompts. Use environment variables or secure vaults."
                 ))
-        
+
         # Check for overly permissive instructions
         permissive_patterns = [
             r"you\s+can\s+do\s+anything",
@@ -315,7 +315,7 @@ class SecurityScanner:
             r"unlimited\s+access",
             r"bypass\s+all\s+rules"
         ]
-        
+
         for pattern in permissive_patterns:
             if re.search(pattern, context_lower):
                 issues.append(SecurityIssue(
@@ -327,9 +327,9 @@ class SecurityScanner:
                     evidence="Contains permissive language",
                     recommendation="Define clear boundaries and limitations in system prompts."
                 ))
-        
+
         return issues
-    
+
     def _check_compliance(
         self,
         prompt: str,
@@ -338,7 +338,7 @@ class SecurityScanner:
         """Check compliance with specific standards."""
         issues = []
         compliant = True
-        
+
         if standard.upper() == "GDPR":
             # Check GDPR compliance
             if re.search(r"personal\s+data", prompt, re.IGNORECASE):
@@ -354,7 +354,7 @@ class SecurityScanner:
                         recommendation="Include explicit consent mechanisms for personal data processing."
                     ))
                     compliant = False
-        
+
         elif standard.upper() == "HIPAA":
             # Check HIPAA compliance
             phi_keywords = ["patient", "medical", "health", "diagnosis", "treatment"]
@@ -371,7 +371,7 @@ class SecurityScanner:
                         recommendation="Implement PHI protection measures: encryption, access controls, audit logs."
                     ))
                     compliant = False
-        
+
         elif standard.upper() == "PCI-DSS":
             # Check PCI-DSS compliance
             if re.search(r"credit\s+card|payment|cardholder", prompt, re.IGNORECASE):
@@ -385,14 +385,14 @@ class SecurityScanner:
                     recommendation="Never store or log payment card data. Use tokenization and encryption."
                 ))
                 compliant = False
-        
+
         return issues, compliant
-    
+
     def _calculate_security_score(self, issues: List[SecurityIssue]) -> int:
         """Calculate overall security score (0-100)."""
         if not issues:
             return 100
-        
+
         # Deduct points based on severity
         score = 100
         severity_deductions = {
@@ -402,19 +402,19 @@ class SecurityScanner:
             SecurityLevel.LOW: 3,
             SecurityLevel.INFO: 1
         }
-        
+
         for issue in issues:
             score -= severity_deductions.get(issue.severity, 5)
-        
+
         return max(0, score)
-    
+
     def _generate_recommendations(self, issues: List[SecurityIssue]) -> List[str]:
         """Generate security recommendations based on issues found."""
         recommendations = []
-        
+
         # Group issues by type
         issue_types = set(issue.type for issue in issues)
-        
+
         if VulnerabilityType.PROMPT_INJECTION in issue_types:
             recommendations.append(
                 "Implement input validation and sanitization for all user inputs"
@@ -422,7 +422,7 @@ class SecurityScanner:
             recommendations.append(
                 "Use parameterized queries and avoid string concatenation for prompts"
             )
-        
+
         if VulnerabilityType.PII_EXPOSURE in issue_types:
             recommendations.append(
                 "Implement PII detection and redaction in pre-processing"
@@ -430,7 +430,7 @@ class SecurityScanner:
             recommendations.append(
                 "Use data anonymization techniques for examples and testing"
             )
-        
+
         if VulnerabilityType.JAILBREAK_ATTEMPT in issue_types:
             recommendations.append(
                 "Implement content filtering to detect and block jailbreak attempts"
@@ -438,7 +438,7 @@ class SecurityScanner:
             recommendations.append(
                 "Monitor for unusual patterns in user inputs"
             )
-        
+
         if VulnerabilityType.SYSTEM_PROMPT_LEAK in issue_types:
             recommendations.append(
                 "Add safeguards to prevent system prompt disclosure"
@@ -446,7 +446,7 @@ class SecurityScanner:
             recommendations.append(
                 "Implement output filtering to block system information leaks"
             )
-        
+
         # General recommendations
         if issues:
             recommendations.append(
@@ -458,9 +458,9 @@ class SecurityScanner:
             recommendations.append(
                 "Log and monitor security events for incident response"
             )
-        
+
         return list(set(recommendations))  # Remove duplicates
-    
+
     def scan_agent_config(
         self,
         config: Dict[str, Any]
@@ -476,7 +476,7 @@ class SecurityScanner:
         """
         issues = []
         warnings = []
-        
+
         # Check for exposed credentials
         for key, value in config.items():
             if isinstance(value, str):
@@ -491,13 +491,13 @@ class SecurityScanner:
                             evidence="[REDACTED]",
                             recommendation="Use environment variables or secure vaults for credentials"
                         ))
-        
+
         # Check temperature settings
         if "temperature" in config:
             temp = config["temperature"]
             if temp > 1.5:
                 warnings.append(f"High temperature ({temp}) may produce unpredictable outputs")
-        
+
         # Check for insecure settings
         if config.get("allow_code_execution", False):
             issues.append(SecurityIssue(
@@ -509,10 +509,10 @@ class SecurityScanner:
                 evidence="allow_code_execution=True",
                 recommendation="Disable code execution unless absolutely necessary. Implement sandboxing if required."
             ))
-        
+
         score = self._calculate_security_score(issues)
         recommendations = self._generate_recommendations(issues)
-        
+
         return SecurityScanResult(
             passed=len([i for i in issues if i.severity == SecurityLevel.CRITICAL]) == 0,
             score=score,
@@ -521,7 +521,7 @@ class SecurityScanner:
             recommendations=recommendations,
             compliance_status={}
         )
-    
+
     def sanitize_prompt(
         self,
         prompt: str,
@@ -541,7 +541,7 @@ class SecurityScanner:
         """
         sanitized = prompt
         changes = []
-        
+
         # Remove PII
         if remove_pii:
             for pii_type, pattern in self.pii_patterns.items():
@@ -554,7 +554,7 @@ class SecurityScanner:
                             sanitized[match.end():]
                         )
                         changes.append(f"Redacted {pii_type}")
-        
+
         # Block injection attempts
         if block_injections:
             for pattern in self.injection_patterns:
@@ -567,7 +567,7 @@ class SecurityScanner:
                         flags=re.IGNORECASE
                     )
                     changes.append("Blocked potential injection attempt")
-        
+
         return sanitized, changes
 
 

@@ -44,11 +44,11 @@ class RefinementResult:
 
 class RefinementEngine:
     """Manages iterative prompt refinement with feedback loops."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.orchestrator = OrchestratorAgent()
-    
+
     def refine_prompt(
         self,
         original_prompt: str,
@@ -75,14 +75,14 @@ class RefinementEngine:
             RefinementResult with the refined prompt and metadata
         """
         self.logger.info(f"Starting refinement iteration {feedback.iteration}")
-        
+
         # Build context from history
         context = self._build_context(
             original_prompt,
             current_prompt,
             refinement_history or []
         )
-        
+
         # Generate refinement prompt
         refinement_prompt = self._generate_refinement_prompt(
             original_prompt,
@@ -90,34 +90,34 @@ class RefinementEngine:
             feedback,
             context
         )
-        
+
         # Get refined version
         refined_prompt = self._execute_refinement(
             refinement_prompt,
             prompt_type
         )
-        
+
         # Analyze changes
         changes_made = self._analyze_changes(
             current_prompt,
             refined_prompt,
             feedback
         )
-        
+
         # Evaluate quality
         quality_score = self._evaluate_refinement(
             original_prompt,
             refined_prompt,
             feedback
         )
-        
+
         # Compare to previous
         comparison = self._compare_to_previous(
             current_prompt,
             refined_prompt,
             feedback
         )
-        
+
         # Save to database if session provided
         if session_id and user_id:
             db.add_refinement(
@@ -129,7 +129,7 @@ class RefinementEngine:
                 changes_made=changes_made,
                 quality_score=quality_score
             )
-        
+
         return RefinementResult(
             iteration=feedback.iteration,
             refined_prompt=refined_prompt,
@@ -138,7 +138,7 @@ class RefinementEngine:
             comparison_to_previous=comparison,
             timestamp=datetime.now().isoformat()
         )
-    
+
     def _build_context(
         self,
         original_prompt: str,
@@ -148,9 +148,9 @@ class RefinementEngine:
         """Build context from refinement history."""
         if not history:
             return "This is the first refinement iteration."
-        
+
         context_parts = ["Previous refinement iterations:"]
-        
+
         for item in history[-3:]:  # Last 3 iterations
             context_parts.append(f"""
 Iteration {item['iteration_number']}:
@@ -158,9 +158,9 @@ Iteration {item['iteration_number']}:
 - Changes: {item.get('changes_made', 'N/A')}
 - Quality Score: {item.get('quality_score', 'N/A')}
 """)
-        
+
         return "\n".join(context_parts)
-    
+
     def _generate_refinement_prompt(
         self,
         original_prompt: str,
@@ -176,9 +176,9 @@ Iteration {item['iteration_number']}:
             "missing_context": "Add the missing context and background information.",
             "custom": "Address the specific feedback provided by the user."
         }
-        
+
         guidance = feedback_type_guidance.get(feedback.feedback_type, feedback_type_guidance["custom"])
-        
+
         return f"""You are refining an optimized prompt based on user feedback.
 
 ORIGINAL USER PROMPT:
@@ -212,7 +212,7 @@ Your task:
 
 Provide the refined prompt that addresses the feedback while maintaining the quality of the optimization.
 Do not include explanations - only output the refined prompt itself."""
-    
+
     def _execute_refinement(
         self,
         refinement_prompt: str,
@@ -225,19 +225,19 @@ Do not include explanations - only output the refined prompt itself."""
 Your job is to take an existing optimized prompt and refine it based on specific feedback.
 Make surgical, targeted improvements while preserving what works well.
 Output only the refined prompt without explanations or meta-commentary."""
-            
+
             response = generate_completion(
                 prompt=refinement_prompt,
                 system_prompt=system_prompt,
                 temperature=0.5,  # Balanced for refinement
                 max_tokens=3000
             )
-            
+
             return response["content"].strip()
         except Exception as e:
             self.logger.error(f"Error executing refinement: {str(e)}")
             raise
-    
+
     def _analyze_changes(
         self,
         previous_prompt: str,
@@ -257,7 +257,7 @@ USER FEEDBACK THAT GUIDED CHANGES:
 {feedback.feedback_text}
 
 Provide a concise summary (2-3 sentences) of the main changes made and how they address the feedback."""
-        
+
         try:
             response = generate_completion(
                 prompt=analysis_prompt,
@@ -269,7 +269,7 @@ Provide a concise summary (2-3 sentences) of the main changes made and how they 
         except Exception as e:
             self.logger.error(f"Error analyzing changes: {str(e)}")
             return "Changes made based on user feedback."
-    
+
     def _evaluate_refinement(
         self,
         original_prompt: str,
@@ -298,7 +298,7 @@ Rate the refinement on a scale of 0-100 based on:
 4. Improvement over original (20 points)
 
 Respond with ONLY a number between 0 and 100."""
-        
+
         try:
             response = generate_completion(
                 prompt=evaluation_prompt,
@@ -306,7 +306,7 @@ Respond with ONLY a number between 0 and 100."""
                 temperature=0.2,
                 max_tokens=10
             )
-            
+
             # Extract number from response
             score_text = response["content"].strip()
             score = int(''.join(filter(str.isdigit, score_text)))
@@ -314,7 +314,7 @@ Respond with ONLY a number between 0 and 100."""
         except Exception as e:
             self.logger.error(f"Error evaluating refinement: {str(e)}")
             return 75  # Default score
-    
+
     def _compare_to_previous(
         self,
         previous_prompt: str,
@@ -334,7 +334,7 @@ FEEDBACK ADDRESSED:
 {feedback.feedback_text}
 
 In 2-3 sentences, explain how the refined version improves upon the previous one."""
-        
+
         try:
             response = generate_completion(
                 prompt=comparison_prompt,
@@ -346,7 +346,7 @@ In 2-3 sentences, explain how the refined version improves upon the previous one
         except Exception as e:
             self.logger.error(f"Error generating comparison: {str(e)}")
             return "Refined version addresses user feedback."
-    
+
     def suggest_improvements(
         self,
         prompt: str,
@@ -384,7 +384,7 @@ Format as JSON array:
   {{"category": "...", "issue": "...", "suggestion": "..."}},
   ...
 ]"""
-        
+
         try:
             response = generate_completion(
                 prompt=suggestion_prompt,
@@ -392,7 +392,7 @@ Format as JSON array:
                 temperature=0.4,
                 max_tokens=1000
             )
-            
+
             # Parse JSON response
             import json
             suggestions = json.loads(response["content"])
@@ -406,7 +406,7 @@ Format as JSON array:
                     "suggestion": "Consider adding more specific examples or constraints"
                 }
             ]
-    
+
     def compare_versions(
         self,
         versions: List[Dict[str, Any]],
@@ -424,17 +424,17 @@ Format as JSON array:
         """
         if len(versions) < 2:
             return {"error": "Need at least 2 versions to compare"}
-        
+
         # Sort by version number
         sorted_versions = sorted(versions, key=lambda x: x.get('version_number', 0))
-        
+
         comparison = {
             "total_versions": len(sorted_versions),
             "versions": [],
             "evolution_summary": "",
             "quality_trend": []
         }
-        
+
         # Analyze each version
         for i, version in enumerate(sorted_versions):
             version_info = {
@@ -444,35 +444,35 @@ Format as JSON array:
                 "change_description": version.get('change_description', 'N/A'),
                 "prompt_length": len(version.get('prompt_text', ''))
             }
-            
+
             if i > 0 and highlight_differences:
                 # Compare with previous version
                 prev_text = sorted_versions[i-1].get('prompt_text', '')
                 curr_text = version.get('prompt_text', '')
                 version_info["differences"] = self._highlight_differences(prev_text, curr_text)
-            
+
             comparison["versions"].append(version_info)
-            
+
             if version.get('quality_score'):
                 comparison["quality_trend"].append({
                     "version": version.get('version_number', i + 1),
                     "score": version.get('quality_score')
                 })
-        
+
         # Generate evolution summary
         comparison["evolution_summary"] = self._generate_evolution_summary(sorted_versions)
-        
+
         return comparison
-    
+
     def _highlight_differences(self, text1: str, text2: str) -> Dict[str, Any]:
         """Highlight differences between two texts."""
         # Simple word-level diff
         words1 = set(text1.split())
         words2 = set(text2.split())
-        
+
         added = words2 - words1
         removed = words1 - words2
-        
+
         return {
             "added_words": len(added),
             "removed_words": len(removed),
@@ -480,20 +480,20 @@ Format as JSON array:
             "sample_additions": list(added)[:10] if added else [],
             "sample_removals": list(removed)[:10] if removed else []
         }
-    
+
     def _generate_evolution_summary(self, versions: List[Dict]) -> str:
         """Generate a summary of how the prompt evolved."""
         if len(versions) < 2:
             return "Single version - no evolution to analyze."
-        
+
         first_version = versions[0]
         last_version = versions[-1]
-        
+
         summary_parts = [
             f"Evolved through {len(versions)} iterations.",
             f"Length changed from {len(first_version.get('prompt_text', ''))} to {len(last_version.get('prompt_text', ''))} characters."
         ]
-        
+
         # Quality trend
         scores = [v.get('quality_score') for v in versions if v.get('quality_score')]
         if len(scores) >= 2:
@@ -503,9 +503,9 @@ Format as JSON array:
                 summary_parts.append(f"Quality decreased from {scores[0]} to {scores[-1]}.")
             else:
                 summary_parts.append(f"Quality remained stable at {scores[-1]}.")
-        
+
         return " ".join(summary_parts)
-    
+
     def rollback_to_version(
         self,
         prompt_id: str,
@@ -526,14 +526,14 @@ Format as JSON array:
         try:
             # Get all versions
             versions = db.get_prompt_versions(prompt_id)
-            
+
             # Find target version
             target = next((v for v in versions if v['version_number'] == target_version), None)
-            
+
             if not target:
                 self.logger.error(f"Version {target_version} not found")
                 return None
-            
+
             # Create new version as rollback
             max_version = max(v['version_number'] for v in versions)
             new_version = db.create_prompt_version(
@@ -547,7 +547,7 @@ Format as JSON array:
                 parent_version_id=target['id'],
                 created_by="system"
             )
-            
+
             if new_version:
                 return {
                     "version_number": max_version + 1,
@@ -555,7 +555,7 @@ Format as JSON array:
                     "prompt_text": target['prompt_text'],
                     "message": f"Successfully rolled back to version {target_version}"
                 }
-            
+
             return None
         except Exception as e:
             self.logger.error(f"Error rolling back version: {str(e)}")
@@ -586,7 +586,7 @@ def refine_with_feedback(
         RefinementResult
     """
     engine = RefinementEngine()
-    
+
     feedback = RefinementFeedback(
         iteration=kwargs.get('iteration', 1),
         feedback_type=feedback_type,
@@ -594,10 +594,10 @@ def refine_with_feedback(
         specific_issues=specific_issues or [],
         desired_changes=desired_changes or []
     )
-    
+
     from agents import PromptType
     prompt_type = kwargs.get('prompt_type', PromptType.GENERAL)
-    
+
     return engine.refine_prompt(
         original_prompt=kwargs.get('original_prompt', current_prompt),
         current_prompt=current_prompt,

@@ -32,7 +32,7 @@ class PerformanceMetric:
     tokens_used: Dict[str, int] = field(default_factory=dict)
     cost: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def finish(self):
         """Mark metric as finished and calculate duration."""
         if self.end_time is None:
@@ -55,19 +55,19 @@ class ProfileResult:
 
 class PerformanceProfiler:
     """Profiles performance of prompt operations."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.metrics: List[PerformanceMetric] = []
         self.session_start: Optional[float] = None
         self.active_metric: Optional[PerformanceMetric] = None
-    
+
     def start_session(self):
         """Start a new profiling session."""
         self.metrics = []
         self.session_start = time.time()
         self.logger.info("Started performance profiling session")
-    
+
     def start_metric(
         self,
         name: str,
@@ -82,7 +82,7 @@ class PerformanceProfiler:
         self.active_metric = metric
         self.metrics.append(metric)
         return metric
-    
+
     def finish_metric(
         self,
         tokens_used: Optional[Dict[str, int]] = None,
@@ -96,36 +96,36 @@ class PerformanceProfiler:
             if cost is not None:
                 self.active_metric.cost = cost
             self.active_metric = None
-    
+
     def end_session(self) -> ProfileResult:
         """End profiling session and generate results."""
         if self.session_start is None:
             raise ValueError("No active profiling session")
-        
+
         total_duration = time.time() - self.session_start
-        
+
         # Calculate breakdown by component
         breakdown = {}
         for metric in self.metrics:
             if metric.duration:
                 breakdown[metric.name] = breakdown.get(metric.name, 0) + metric.duration
-        
+
         # Calculate totals
         total_tokens = sum(
             sum(m.tokens_used.values()) for m in self.metrics
         )
         total_cost = sum(m.cost for m in self.metrics)
-        
+
         # Identify bottlenecks
         bottlenecks = self._identify_bottlenecks(self.metrics, total_duration)
-        
+
         # Generate recommendations
         recommendations = self._generate_recommendations(
             self.metrics,
             breakdown,
             bottlenecks
         )
-        
+
         result = ProfileResult(
             total_duration=total_duration,
             metrics=self.metrics,
@@ -136,12 +136,12 @@ class PerformanceProfiler:
             recommendations=recommendations,
             timestamp=datetime.now().isoformat()
         )
-        
+
         # Reset session
         self.session_start = None
-        
+
         return result
-    
+
     def _identify_bottlenecks(
         self,
         metrics: List[PerformanceMetric],
@@ -149,17 +149,17 @@ class PerformanceProfiler:
     ) -> List[Dict[str, Any]]:
         """Identify performance bottlenecks."""
         bottlenecks = []
-        
+
         # Sort metrics by duration
         sorted_metrics = sorted(
             [m for m in metrics if m.duration],
             key=lambda x: x.duration,
             reverse=True
         )
-        
+
         for metric in sorted_metrics[:5]:  # Top 5 slowest
             percentage = (metric.duration / total_duration) * 100
-            
+
             if percentage > 20:  # If taking more than 20% of total time
                 bottlenecks.append({
                     "component": metric.name,
@@ -169,9 +169,9 @@ class PerformanceProfiler:
                     "tokens": sum(metric.tokens_used.values()),
                     "cost": metric.cost
                 })
-        
+
         return bottlenecks
-    
+
     def _generate_recommendations(
         self,
         metrics: List[PerformanceMetric],
@@ -180,21 +180,21 @@ class PerformanceProfiler:
     ) -> List[str]:
         """Generate performance optimization recommendations."""
         recommendations = []
-        
+
         # Analyze bottlenecks
         for bottleneck in bottlenecks:
             component = bottleneck["component"]
-            
+
             if "api" in component.lower() or "call" in component.lower():
                 recommendations.append(
                     f"⚡ Optimize {component}: Consider caching, reducing token count, or using a faster model"
                 )
-            
+
             if bottleneck["tokens"] > 10000:
                 recommendations.append(
                     f"📊 {component} uses {bottleneck['tokens']} tokens - consider compression or summarization"
                 )
-        
+
         # Check for sequential operations that could be parallelized
         if len(metrics) > 3:
             sequential_time = sum(m.duration for m in metrics if m.duration)
@@ -202,23 +202,23 @@ class PerformanceProfiler:
                 recommendations.append(
                     "🔄 Consider parallelizing independent operations to reduce total time"
                 )
-        
+
         # Cost optimization
         total_cost = sum(m.cost for m in metrics)
         if total_cost > 0.10:  # More than 10 cents per operation
             recommendations.append(
                 f"💰 High cost per operation (${total_cost:.4f}) - consider using cheaper models for non-critical components"
             )
-        
+
         # Token efficiency
         total_tokens = sum(sum(m.tokens_used.values()) for m in metrics)
         if total_tokens > 50000:
             recommendations.append(
                 f"📝 High token usage ({total_tokens}) - implement token budget management"
             )
-        
+
         return recommendations
-    
+
     def profile_function(self, name: Optional[str] = None):
         """Decorator to profile a function."""
         def decorator(func: Callable) -> Callable:
@@ -226,7 +226,7 @@ class PerformanceProfiler:
             def wrapper(*args, **kwargs):
                 metric_name = name or func.__name__
                 self.start_metric(metric_name)
-                
+
                 try:
                     result = func(*args, **kwargs)
                     self.finish_metric()
@@ -234,10 +234,10 @@ class PerformanceProfiler:
                 except Exception as e:
                     self.finish_metric()
                     raise e
-            
+
             return wrapper
         return decorator
-    
+
     def compare_profiles(
         self,
         baseline: ProfileResult,
@@ -266,35 +266,35 @@ class PerformanceProfiler:
             "regressions": [],
             "improvements": []
         }
-        
+
         # Check for regressions
         if comparison["duration_change"]["percentage"] > 10:
             comparison["regressions"].append(
                 f"⚠️ Performance regression: {comparison['duration_change']['percentage']:.1f}% slower"
             )
-        
+
         if comparison["cost_change"]["percentage"] > 10:
             comparison["regressions"].append(
                 f"⚠️ Cost regression: {comparison['cost_change']['percentage']:.1f}% more expensive"
             )
-        
+
         # Check for improvements
         if comparison["duration_change"]["percentage"] < -10:
             comparison["improvements"].append(
                 f"✅ Performance improvement: {abs(comparison['duration_change']['percentage']):.1f}% faster"
             )
-        
+
         if comparison["cost_change"]["percentage"] < -10:
             comparison["improvements"].append(
                 f"✅ Cost improvement: {abs(comparison['cost_change']['percentage']):.1f}% cheaper"
             )
-        
+
         return comparison
 
 
 class CostTracker:
     """Track costs across operations."""
-    
+
     # Pricing per 1K tokens (as of 2026)
     MODEL_PRICING = {
         "grok-beta": {"input": 0.15, "output": 0.60},
@@ -306,10 +306,10 @@ class CostTracker:
         "gpt-4": {"input": 30.00, "output": 60.00},
         "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
     }
-    
+
     def __init__(self):
         self.operations: List[Dict[str, Any]] = []
-    
+
     def track_operation(
         self,
         model: str,
@@ -320,12 +320,12 @@ class CostTracker:
     ):
         """Track a single operation's cost."""
         pricing = self.MODEL_PRICING.get(model, {"input": 0.0, "output": 0.0})
-        
+
         cost = (
             (input_tokens / 1000 * pricing["input"]) +
             (output_tokens / 1000 * pricing["output"])
         )
-        
+
         operation = {
             "timestamp": datetime.now().isoformat(),
             "model": model,
@@ -336,9 +336,9 @@ class CostTracker:
             "cost": cost,
             "metadata": metadata or {}
         }
-        
+
         self.operations.append(operation)
-    
+
     def get_summary(
         self,
         time_period: Optional[str] = None
@@ -350,13 +350,13 @@ class CostTracker:
                 "total_tokens": 0,
                 "operation_count": 0
             }
-        
+
         # Filter by time period if specified
         operations = self.operations  # TODO: Implement time filtering
-        
+
         total_cost = sum(op["cost"] for op in operations)
         total_tokens = sum(op["total_tokens"] for op in operations)
-        
+
         # Group by model
         by_model = {}
         for op in operations:
@@ -370,7 +370,7 @@ class CostTracker:
             by_model[model]["operations"] += 1
             by_model[model]["tokens"] += op["total_tokens"]
             by_model[model]["cost"] += op["cost"]
-        
+
         # Group by operation type
         by_type = {}
         for op in operations:
@@ -384,7 +384,7 @@ class CostTracker:
             by_type[op_type]["operations"] += 1
             by_type[op_type]["tokens"] += op["total_tokens"]
             by_type[op_type]["cost"] += op["cost"]
-        
+
         return {
             "total_cost": total_cost,
             "total_tokens": total_tokens,
@@ -395,7 +395,7 @@ class CostTracker:
             "most_expensive_model": max(by_model.items(), key=lambda x: x[1]["cost"])[0] if by_model else None,
             "most_used_model": max(by_model.items(), key=lambda x: x[1]["operations"])[0] if by_model else None
         }
-    
+
     def project_costs(
         self,
         operations_per_day: int,
@@ -404,13 +404,13 @@ class CostTracker:
         """Project future costs based on current usage."""
         if not self.operations:
             return {"error": "No operations to base projection on"}
-        
+
         avg_cost = sum(op["cost"] for op in self.operations) / len(self.operations)
-        
+
         daily_cost = avg_cost * operations_per_day
         monthly_cost = daily_cost * days
         yearly_cost = daily_cost * 365
-        
+
         return {
             "average_cost_per_operation": avg_cost,
             "projected_daily_cost": daily_cost,
@@ -419,34 +419,34 @@ class CostTracker:
             "operations_per_day": operations_per_day,
             "assumptions": f"Based on average of {len(self.operations)} operations"
         }
-    
+
     def suggest_cost_optimizations(self) -> List[str]:
         """Suggest ways to reduce costs."""
         if not self.operations:
             return []
-        
+
         suggestions = []
         summary = self.get_summary()
-        
+
         # Check if using expensive models
         if summary.get("most_expensive_model") in ["claude-opus", "gpt-4"]:
             suggestions.append(
-                f"💰 Consider using cheaper models like Claude Sonnet or GPT-3.5 for non-critical operations"
+                "💰 Consider using cheaper models like Claude Sonnet or GPT-3.5 for non-critical operations"
             )
-        
+
         # Check average tokens per operation
         avg_tokens = summary["total_tokens"] / summary["operation_count"]
         if avg_tokens > 10000:
             suggestions.append(
                 f"📊 High average token usage ({int(avg_tokens)}) - implement prompt compression"
             )
-        
+
         # Check if costs are high
         if summary["total_cost"] > 10.0:
             suggestions.append(
                 "⚠️ High cumulative costs - consider implementing caching and rate limiting"
             )
-        
+
         # Model-specific suggestions
         by_model = summary.get("by_model", {})
         for model, stats in by_model.items():
@@ -454,13 +454,13 @@ class CostTracker:
                 suggestions.append(
                     f"🎯 {model} accounts for {(stats['cost']/summary['total_cost']*100):.0f}% of costs - optimize or switch models"
                 )
-        
+
         return suggestions
-    
+
     def export_report(self, format: str = "json") -> str:
         """Export cost report."""
         summary = self.get_summary()
-        
+
         if format == "json":
             return json.dumps(summary, indent=2)
         elif format == "markdown":

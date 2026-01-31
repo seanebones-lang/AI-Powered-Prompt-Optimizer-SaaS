@@ -15,7 +15,7 @@ Generates:
 import logging
 import json
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 from api_utils import generate_completion
@@ -99,36 +99,36 @@ class AgentBlueprint:
     version: str
     created_at: str
     agent_type: AgentType
-    
+
     # Core Components
     system_prompt: str
     personality_traits: List[str]
     capabilities: List[str]
     constraints: List[str]
-    
+
     # Tools & Integrations
     tools: List[ToolDefinition]
     integrations: List[IntegrationRequirement]
-    
+
     # Workflow
     workflow_steps: List[WorkflowStep]
     orchestration_pattern: str
-    
+
     # Configuration
     model_config: Dict[str, Any]
     context_window: int
     max_tokens: int
     temperature: float
-    
+
     # Testing & Validation
     test_scenarios: List[TestScenario]
     validation_rules: List[str]
-    
+
     # Deployment
     deployment_config: Dict[str, Any]
     monitoring_metrics: List[str]
     scaling_strategy: str
-    
+
     # Documentation
     usage_examples: List[str]
     best_practices: List[str]
@@ -137,10 +137,10 @@ class AgentBlueprint:
 
 class BlueprintGenerator:
     """Generates comprehensive agent blueprints."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-    
+
     def generate_blueprint(
         self,
         agent_description: str,
@@ -165,55 +165,55 @@ class BlueprintGenerator:
             Complete AgentBlueprint object
         """
         self.logger.info(f"Generating blueprint for {agent_type.value} agent in {domain} domain")
-        
+
         # Generate system prompt
         system_prompt = self._generate_system_prompt(
             agent_description, agent_type, domain, use_cases, constraints
         )
-        
+
         # Generate personality traits
         personality_traits = self._generate_personality_traits(agent_type, domain)
-        
+
         # Generate capabilities
         capabilities = self._generate_capabilities(agent_description, use_cases)
-        
+
         # Generate constraints
         agent_constraints = self._generate_constraints(constraints, domain)
-        
+
         # Generate tools
         tools = self._generate_tools(use_cases, agent_type, required_integrations)
-        
+
         # Generate integrations
         integrations = self._generate_integrations(required_integrations, domain)
-        
+
         # Generate workflow
         workflow_steps = self._generate_workflow(use_cases, tools, agent_type)
         orchestration_pattern = self._determine_orchestration_pattern(agent_type, workflow_steps)
-        
+
         # Generate model configuration
         model_config = self._generate_model_config(agent_type, domain)
-        
+
         # Generate test scenarios
         test_scenarios = self._generate_test_scenarios(use_cases, agent_type)
-        
+
         # Generate validation rules
         validation_rules = self._generate_validation_rules(domain, constraints)
-        
+
         # Generate deployment config
         deployment_config = self._generate_deployment_config(agent_type, domain)
-        
+
         # Generate monitoring metrics
         monitoring_metrics = self._generate_monitoring_metrics(agent_type)
-        
+
         # Generate usage examples
         usage_examples = self._generate_usage_examples(use_cases, agent_type)
-        
+
         # Generate best practices
         best_practices = self._generate_best_practices(agent_type, domain)
-        
+
         # Generate known limitations
         known_limitations = self._generate_limitations(agent_type, constraints)
-        
+
         # Create blueprint
         blueprint = AgentBlueprint(
             blueprint_id=f"bp_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -242,9 +242,9 @@ class BlueprintGenerator:
             best_practices=best_practices,
             known_limitations=known_limitations
         )
-        
+
         return blueprint
-    
+
     def _generate_system_prompt(
         self,
         description: str,
@@ -284,7 +284,7 @@ Make it professional, comprehensive, and production-ready. The agent should iden
         except Exception as e:
             self.logger.error(f"Error generating system prompt: {str(e)}")
             return self._fallback_system_prompt(description, agent_type)
-    
+
     def _fallback_system_prompt(self, description: str, agent_type: AgentType) -> str:
         """Fallback system prompt if API fails."""
         return f"""You are NextEleven AI - {agent_type.value.replace('_', ' ').title()} Agent.
@@ -304,7 +304,7 @@ Guidelines:
 - Explain your reasoning when appropriate
 - Respect user privacy and data security
 - Stay within your defined capabilities"""
-    
+
     def _generate_personality_traits(self, agent_type: AgentType, domain: str) -> List[str]:
         """Generate appropriate personality traits for the agent."""
         base_traits = {
@@ -316,9 +316,9 @@ Guidelines:
             AgentType.VALIDATOR: ["meticulous", "critical", "thorough", "unbiased"],
             AgentType.ROUTER: ["intelligent", "efficient", "accurate", "responsive"]
         }
-        
+
         traits = base_traits.get(agent_type, ["professional", "helpful", "reliable"])
-        
+
         # Add domain-specific traits
         if domain.lower() in ["healthcare", "medical"]:
             traits.extend(["compassionate", "careful", "compliant"])
@@ -326,13 +326,13 @@ Guidelines:
             traits.extend(["trustworthy", "secure", "compliant"])
         elif domain.lower() in ["education", "training"]:
             traits.extend(["patient", "encouraging", "adaptive"])
-        
+
         return traits
-    
+
     def _generate_capabilities(self, description: str, use_cases: List[str]) -> List[str]:
         """Extract and generate agent capabilities."""
         capabilities = []
-        
+
         # Extract from use cases
         for use_case in use_cases:
             if "analyze" in use_case.lower():
@@ -345,7 +345,7 @@ Guidelines:
                 capabilities.append("Validation and verification")
             if "recommend" in use_case.lower() or "suggest" in use_case.lower():
                 capabilities.append("Recommendations and suggestions")
-        
+
         # Add common capabilities
         capabilities.extend([
             "Natural language understanding",
@@ -353,13 +353,13 @@ Guidelines:
             "Error detection and recovery",
             "Multi-step reasoning"
         ])
-        
+
         return list(set(capabilities))  # Remove duplicates
-    
+
     def _generate_constraints(self, constraints: Optional[List[str]], domain: str) -> List[str]:
         """Generate agent constraints and limitations."""
         agent_constraints = constraints or []
-        
+
         # Add domain-specific constraints
         if domain.lower() in ["healthcare", "medical"]:
             agent_constraints.extend([
@@ -373,7 +373,7 @@ Guidelines:
                 "Cannot provide financial advice without disclaimers",
                 "Must ensure data encryption"
             ])
-        
+
         # Add common constraints
         agent_constraints.extend([
             "Must respect user privacy",
@@ -381,9 +381,9 @@ Guidelines:
             "Must handle errors gracefully",
             "Should acknowledge uncertainty"
         ])
-        
+
         return list(set(agent_constraints))
-    
+
     def _generate_tools(
         self,
         use_cases: List[str],
@@ -392,7 +392,7 @@ Guidelines:
     ) -> List[ToolDefinition]:
         """Generate tool definitions based on use cases."""
         tools = []
-        
+
         # Common tools for all agents
         tools.append(ToolDefinition(
             name="log_event",
@@ -407,7 +407,7 @@ Guidelines:
             example_usage='log_event("user_query", "Processing user request", "info")',
             error_handling="Returns false on failure, continues execution"
         ))
-        
+
         # Add tools based on use cases
         if any("search" in uc.lower() or "find" in uc.lower() for uc in use_cases):
             tools.append(ToolDefinition(
@@ -423,7 +423,7 @@ Guidelines:
                 example_usage='search_knowledge_base("customer policies", limit=5)',
                 error_handling="Returns empty results on failure, logs error"
             ))
-        
+
         if any("analyze" in uc.lower() for uc in use_cases):
             tools.append(ToolDefinition(
                 name="analyze_data",
@@ -438,7 +438,7 @@ Guidelines:
                 example_usage='analyze_data(sales_data, "trend", {"period": "monthly"})',
                 error_handling="Returns error object with details, suggests alternatives"
             ))
-        
+
         if any("send" in uc.lower() or "notify" in uc.lower() for uc in use_cases):
             tools.append(ToolDefinition(
                 name="send_notification",
@@ -454,7 +454,7 @@ Guidelines:
                 example_usage='send_notification("user@example.com", "Task completed", "email", "medium")',
                 error_handling="Retries 3 times with exponential backoff, logs failure"
             ))
-        
+
         # Add integration-specific tools
         if required_integrations:
             for integration in required_integrations:
@@ -471,9 +471,9 @@ Guidelines:
                         example_usage='query_database("SELECT * FROM users WHERE id = ?", {"id": 123})',
                         error_handling="Validates query, prevents SQL injection, returns error on failure"
                     ))
-        
+
         return tools
-    
+
     def _generate_integrations(
         self,
         required_integrations: Optional[List[str]],
@@ -481,10 +481,10 @@ Guidelines:
     ) -> List[IntegrationRequirement]:
         """Generate integration requirements."""
         integrations = []
-        
+
         if not required_integrations:
             return integrations
-        
+
         for integration in required_integrations:
             if integration.lower() == "database":
                 integrations.append(IntegrationRequirement(
@@ -513,9 +513,9 @@ Guidelines:
                     rate_limits="Tier 3: 50+ requests/minute",
                     fallback_strategy="Queue messages, retry with backoff"
                 ))
-        
+
         return integrations
-    
+
     def _generate_workflow(
         self,
         use_cases: List[str],
@@ -524,7 +524,7 @@ Guidelines:
     ) -> List[WorkflowStep]:
         """Generate workflow steps."""
         steps = []
-        
+
         # Step 1: Input validation
         steps.append(WorkflowStep(
             step_number=1,
@@ -536,7 +536,7 @@ Guidelines:
             error_handling="Return validation error to user with suggestions",
             timeout_seconds=5
         ))
-        
+
         # Step 2: Context retrieval (if applicable)
         if any(t.category == ToolCategory.DATA_ACCESS for t in tools):
             steps.append(WorkflowStep(
@@ -549,7 +549,7 @@ Guidelines:
                 error_handling="Continue with limited context, log warning",
                 timeout_seconds=10
             ))
-        
+
         # Step 3: Processing
         steps.append(WorkflowStep(
             step_number=len(steps) + 1,
@@ -561,7 +561,7 @@ Guidelines:
             error_handling="Retry with simplified approach, return partial results",
             timeout_seconds=30
         ))
-        
+
         # Step 4: Response generation
         steps.append(WorkflowStep(
             step_number=len(steps) + 1,
@@ -573,7 +573,7 @@ Guidelines:
             error_handling="Return generic error message, log details",
             timeout_seconds=10
         ))
-        
+
         # Step 5: Post-processing (if needed)
         if any(t.category == ToolCategory.COMMUNICATION for t in tools):
             steps.append(WorkflowStep(
@@ -586,9 +586,9 @@ Guidelines:
                 error_handling="Log failure but don't block response",
                 timeout_seconds=5
             ))
-        
+
         return steps
-    
+
     def _determine_orchestration_pattern(
         self,
         agent_type: AgentType,
@@ -603,7 +603,7 @@ Guidelines:
             return "Dynamic Routing with Conditional Branching"
         else:
             return "Linear Sequential Processing"
-    
+
     def _generate_model_config(self, agent_type: AgentType, domain: str) -> Dict[str, Any]:
         """Generate model configuration."""
         base_config = {
@@ -615,7 +615,7 @@ Guidelines:
             "frequency_penalty": 0.0,
             "presence_penalty": 0.0
         }
-        
+
         # Adjust based on agent type
         if agent_type == AgentType.CONVERSATIONAL:
             base_config["temperature"] = 0.7
@@ -623,9 +623,9 @@ Guidelines:
             base_config["temperature"] = 0.2
         elif agent_type == AgentType.TASK_EXECUTOR:
             base_config["temperature"] = 0.3
-        
+
         return base_config
-    
+
     def _generate_test_scenarios(
         self,
         use_cases: List[str],
@@ -633,7 +633,7 @@ Guidelines:
     ) -> List[TestScenario]:
         """Generate test scenarios."""
         scenarios = []
-        
+
         # Happy path scenario
         scenarios.append(TestScenario(
             scenario_name="Happy Path - Standard Request",
@@ -646,7 +646,7 @@ Guidelines:
             ],
             edge_cases=[]
         ))
-        
+
         # Error handling scenario
         scenarios.append(TestScenario(
             scenario_name="Error Handling - Invalid Input",
@@ -659,7 +659,7 @@ Guidelines:
             ],
             edge_cases=["Empty input", "Extremely long input", "Special characters"]
         ))
-        
+
         # Edge case scenario
         scenarios.append(TestScenario(
             scenario_name="Edge Case - Ambiguous Request",
@@ -672,7 +672,7 @@ Guidelines:
             ],
             edge_cases=["Multiple interpretations possible", "Missing critical information"]
         ))
-        
+
         # Load test scenario
         scenarios.append(TestScenario(
             scenario_name="Load Test - Concurrent Requests",
@@ -685,9 +685,9 @@ Guidelines:
             ],
             edge_cases=["100+ concurrent requests", "Sustained high load"]
         ))
-        
+
         return scenarios
-    
+
     def _generate_validation_rules(
         self,
         domain: str,
@@ -701,7 +701,7 @@ Guidelines:
             "No sensitive data in logs",
             "All errors must be handled gracefully"
         ]
-        
+
         if domain.lower() in ["healthcare", "medical"]:
             rules.extend([
                 "PHI must be encrypted at rest and in transit",
@@ -714,9 +714,9 @@ Guidelines:
                 "Transaction integrity must be maintained",
                 "Audit trail required for all operations"
             ])
-        
+
         return rules
-    
+
     def _generate_deployment_config(self, agent_type: AgentType, domain: str) -> Dict[str, Any]:
         """Generate deployment configuration."""
         return {
@@ -752,7 +752,7 @@ Guidelines:
                 "ssl_termination": True
             }
         }
-    
+
     def _generate_monitoring_metrics(self, agent_type: AgentType) -> List[str]:
         """Generate monitoring metrics."""
         return [
@@ -769,7 +769,7 @@ Guidelines:
             "Success rate by use case",
             "User satisfaction score"
         ]
-    
+
     def _determine_scaling_strategy(self, agent_type: AgentType) -> str:
         """Determine scaling strategy."""
         if agent_type == AgentType.ORCHESTRATOR:
@@ -778,11 +778,11 @@ Guidelines:
             return "Auto-scaling based on queue depth and CPU utilization"
         else:
             return "Horizontal scaling with session affinity"
-    
+
     def _generate_usage_examples(self, use_cases: List[str], agent_type: AgentType) -> List[str]:
         """Generate usage examples."""
         examples = []
-        
+
         for use_case in use_cases[:3]:  # Top 3 use cases
             examples.append(f"""
 Example: {use_case}
@@ -797,17 +797,17 @@ Expected Output:
 {self._generate_example_output(use_case, agent_type)}
 ```
 """)
-        
+
         return examples
-    
+
     def _generate_example_input(self, use_case: str) -> str:
         """Generate example input for a use case."""
         return f"User request related to: {use_case}"
-    
+
     def _generate_example_output(self, use_case: str, agent_type: AgentType) -> str:
         """Generate example output for a use case."""
         return f"Agent response addressing: {use_case}"
-    
+
     def _generate_best_practices(self, agent_type: AgentType, domain: str) -> List[str]:
         """Generate best practices."""
         practices = [
@@ -822,7 +822,7 @@ Expected Output:
             "Implement gradual rollouts for changes",
             "Maintain comprehensive documentation"
         ]
-        
+
         if domain.lower() in ["healthcare", "medical", "finance", "banking"]:
             practices.extend([
                 "Ensure compliance with industry regulations",
@@ -831,9 +831,9 @@ Expected Output:
                 "Conduct regular security audits",
                 "Maintain detailed audit logs"
             ])
-        
+
         return practices
-    
+
     def _generate_limitations(
         self,
         agent_type: AgentType,
@@ -847,14 +847,14 @@ Expected Output:
             "Performance depends on API availability",
             "Cannot execute actions outside defined tools"
         ]
-        
+
         if agent_type == AgentType.CONVERSATIONAL:
             limitations.append("May lose context in very long conversations")
         elif agent_type == AgentType.ANALYST:
             limitations.append("Analysis quality depends on data quality")
-        
+
         return limitations
-    
+
     def _extract_agent_name(self, description: str) -> str:
         """Extract a suitable agent name from description."""
         # Simple extraction - take first few words
@@ -863,7 +863,7 @@ Expected Output:
         if len(name) > 50:
             name = name[:50]
         return name.strip() + " Agent"
-    
+
     def export_to_json(self, blueprint: AgentBlueprint) -> str:
         """Export blueprint to JSON format."""
         # Convert enums and dataclasses to dicts
@@ -877,10 +877,10 @@ Expected Output:
             elif isinstance(obj, dict):
                 return {k: convert(v) for k, v in obj.items()}
             return obj
-        
+
         blueprint_dict = convert(blueprint)
         return json.dumps(blueprint_dict, indent=2)
-    
+
     def export_to_python(self, blueprint: AgentBlueprint) -> str:
         """Export blueprint as executable Python code."""
         code = f'''"""
@@ -991,12 +991,12 @@ if __name__ == "__main__":
     print(result)
 '''
         return code
-    
+
     def _generate_tool_code(self, tools: List[ToolDefinition]) -> str:
         """Generate Python code for tools."""
         if not tools:
             return "# No tools defined"
-        
+
         code_parts = []
         for tool in tools[:3]:  # First 3 tools as examples
             code_parts.append(f'''
@@ -1009,9 +1009,9 @@ def {tool.name}({", ".join(tool.parameters.keys())}):
     # Implement tool logic here
     pass
 ''')
-        
+
         return "\n".join(code_parts)
-    
+
     def export_to_markdown(self, blueprint: AgentBlueprint) -> str:
         """Export blueprint as comprehensive markdown documentation."""
         md = f"""# {blueprint.name}
@@ -1181,7 +1181,7 @@ def generate_agent_blueprint(
     """
     generator = BlueprintGenerator()
     agent_type_enum = AgentType(agent_type.lower())
-    
+
     return generator.generate_blueprint(
         agent_description=description,
         agent_type=agent_type_enum,
