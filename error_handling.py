@@ -1,11 +1,36 @@
 """
 Enhanced error handling and recovery utilities.
+
+This module provides:
+- Retry logic with exponential backoff
+- Error classification and handling
+- Integration with the typed exception hierarchy
+- Structured logging for errors
+
+Usage:
+    from error_handling import retry_with_backoff, ErrorHandler
+    from exceptions import APIError, RateLimitError
+
+    @retry_with_backoff(retryable_exceptions=(APIError, RateLimitError))
+    def call_api():
+        ...
 """
 import logging
 import time
-from typing import Callable, Any, Optional, TypeVar, Tuple, Dict
+from typing import Callable, Any, Optional, TypeVar, Tuple, Dict, Type
 from functools import wraps
 from enum import Enum
+
+from exceptions import (
+    PromptOptimizerError,
+    APIError,
+    RateLimitError,
+    APITimeoutError,
+    ServiceUnavailableError,
+    ValidationError,
+    DatabaseError,
+    AgentError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +38,16 @@ T = TypeVar('T')
 
 
 class ErrorSeverity(Enum):
-    """Error severity levels."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    """Error severity levels for logging and alerting."""
+    LOW = "low"        # Recoverable, minor impact
+    MEDIUM = "medium"  # Degraded functionality
+    HIGH = "high"      # Feature unavailable
+    CRITICAL = "critical"  # System failure
 
 
 class RetryStrategy:
     """Retry strategy configuration."""
-    
+
     def __init__(
         self,
         max_retries: int = 3,
@@ -46,7 +71,7 @@ class RetryStrategy:
         self.max_delay = max_delay
         self.exponential_base = exponential_base
         self.jitter = jitter
-    
+
     def get_delay(self, attempt: int) -> float:
         """Calculate delay for retry attempt."""
         import random
@@ -74,12 +99,12 @@ def retry_with_backoff(
     """
     if strategy is None:
         strategy = RetryStrategy()
-    
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
         def wrapper(*args, **kwargs) -> T:
             last_exception = None
-            
+
             for attempt in range(strategy.max_retries + 1):
                 try:
                     return func(*args, **kwargs)
@@ -98,17 +123,17 @@ def retry_with_backoff(
                         logger.error(
                             f"All {strategy.max_retries + 1} attempts failed for {func.__name__}"
                         )
-            
+
             # All retries exhausted
             raise last_exception
-        
+
         return wrapper
     return decorator
 
 
 class ErrorHandler:
     """Centralized error handling."""
-    
+
     @staticmethod
     def handle_api_error(error: Exception, context: str = "") -> str:
         """
@@ -122,25 +147,25 @@ class ErrorHandler:
             User-friendly error message
         """
         error_msg = str(error).lower()
-        
+
         if "timeout" in error_msg or "timed out" in error_msg:
             return f"Request timed out. The API is taking longer than expected. Please try again.{' ' + context if context else ''}"
-        
+
         if "401" in error_msg or "unauthorized" in error_msg:
             return "Authentication failed. Please check your API key configuration."
-        
+
         if "429" in error_msg or "rate limit" in error_msg:
             return "Rate limit exceeded. Please wait a moment and try again."
-        
+
         if "500" in error_msg or "internal server error" in error_msg:
             return "The API service is experiencing issues. Please try again later."
-        
+
         if "connection" in error_msg or "network" in error_msg:
             return "Network connection error. Please check your internet connection and try again."
-        
+
         # Generic error
         return f"An error occurred: {str(error)}. Please try again.{' ' + context if context else ''}"
-    
+
     @staticmethod
     def log_error(
         error: Exception,
@@ -156,7 +181,7 @@ class ErrorHandler:
             context: Additional context dictionary
         """
         context_str = f" Context: {context}" if context else ""
-        
+
         if severity == ErrorSeverity.CRITICAL:
             logger.critical(f"CRITICAL ERROR: {str(error)}{context_str}", exc_info=True)
         elif severity == ErrorSeverity.HIGH:
@@ -171,25 +196,199 @@ def safe_execute(
     func: Callable[..., T],
     default: Optional[T] = None,
     error_message: Optional[str] = None,
-    log_error: bool = True
+    log_error: bool = True,
+    reraise_types: Tuple[Type[Exception], ...] = ()
 ) -> Optional[T]:
     """
     Safely execute a function, returning default on error.
-    
+
     Args:
         func: Function to execute
         default: Default value to return on error
         error_message: Custom error message
         log_error: Whether to log errors
-        
+        reraise_types: Exception types that should be re-raised instead of caught
+
     Returns:
         Function result or default value
     """
     try:
         return func()
+    except reraise_types:
+        raise
     except Exception as e:
         if log_error:
             logger.error(f"Error in safe_execute: {str(e)}", exc_info=True)
         if error_message:
             logger.error(error_message)
         return default
+
+
+# =============================================================================
+# Exception Severity Mapping
+# =============================================================================
+
+EXCEPTION_SEVERITY_MAP: Dict[Type[Exception], ErrorSeverity] = {
+    # Critical - system cannot function
+    DatabaseError: ErrorSeverity.CRITICAL,
+
+    # High - major feature unavailable
+    APIError: ErrorSeverity.HIGH,
+    AgentError: ErrorSeverity.HIGH,
+
+    # Medium - degraded but functional
+    RateLimitError: ErrorSeverity.MEDIUM,
+    ServiceUnavailableError: ErrorSeverity.MEDIUM,
+    APITimeoutError: ErrorSeverity.MEDIUM,
+
+    # Low - minor issues
+    ValidationError: ErrorSeverity.LOW,
+}
+
+
+def get_exception_severity(exception: Exception) -> ErrorSeverity:
+    """
+    Get the severity level for an exception.
+
+    Args:
+        exception: The exception to classify
+
+    Returns:
+        ErrorSeverity enum value
+    """
+    for exc_type, severity in EXCEPTION_SEVERITY_MAP.items():
+        if isinstance(exception, exc_type):
+            return severity
+    return ErrorSeverity.MEDIUM  # Default
+
+
+# =============================================================================
+# Default Retryable Exceptions
+# =============================================================================
+
+DEFAULT_RETRYABLE_EXCEPTIONS: Tuple[Type[Exception], ...] = (
+    APITimeoutError,
+    RateLimitError,
+    ServiceUnavailableError,
+    ConnectionError,
+    TimeoutError,
+)
+
+
+def is_retryable(exception: Exception) -> bool:
+    """
+    Determine if an exception should trigger a retry.
+
+    Args:
+        exception: The exception to check
+
+    Returns:
+        True if the exception is retryable
+    """
+    # Check if it's a known retryable type
+    if isinstance(exception, DEFAULT_RETRYABLE_EXCEPTIONS):
+        return True
+
+    # Check error message for retryable patterns
+    error_msg = str(exception).lower()
+    retryable_patterns = [
+        "timeout",
+        "connection",
+        "rate limit",
+        "503",
+        "502",
+        "504",
+        "temporarily unavailable",
+        "try again",
+    ]
+
+    return any(pattern in error_msg for pattern in retryable_patterns)
+
+
+# =============================================================================
+# Enhanced Error Handler
+# =============================================================================
+
+class EnhancedErrorHandler(ErrorHandler):
+    """
+    Extended error handler with additional capabilities.
+
+    Provides:
+    - Exception classification
+    - Structured error context
+    - Integration with monitoring
+    """
+
+    @staticmethod
+    def classify_exception(exception: Exception) -> PromptOptimizerError:
+        """
+        Classify a generic exception into a typed exception.
+
+        Args:
+            exception: The exception to classify
+
+        Returns:
+            A properly typed PromptOptimizerError
+        """
+        if isinstance(exception, PromptOptimizerError):
+            return exception
+
+        error_msg = str(exception).lower()
+
+        # Classify based on error message patterns
+        if "timeout" in error_msg:
+            return APITimeoutError(str(exception), original_error=exception)
+
+        if "rate limit" in error_msg or "429" in error_msg:
+            return RateLimitError(str(exception), original_error=exception)
+
+        if "401" in error_msg or "unauthorized" in error_msg:
+            from exceptions import AuthenticationError
+            return AuthenticationError(str(exception), original_error=exception)
+
+        if "database" in error_msg or "sql" in error_msg:
+            from exceptions import DatabaseQueryError
+            return DatabaseQueryError(str(exception), original_error=exception)
+
+        if "validation" in error_msg or "invalid" in error_msg:
+            return ValidationError(str(exception), original_error=exception)
+
+        # Default to generic API error
+        return APIError(str(exception), original_error=exception)
+
+    @staticmethod
+    def format_error_context(
+        exception: Exception,
+        operation: str,
+        **additional_context
+    ) -> Dict[str, Any]:
+        """
+        Format error context for logging and monitoring.
+
+        Args:
+            exception: The exception
+            operation: Name of the operation that failed
+            **additional_context: Additional context values
+
+        Returns:
+            Structured context dictionary
+        """
+        context = {
+            "operation": operation,
+            "exception_type": type(exception).__name__,
+            "message": str(exception),
+            "severity": get_exception_severity(exception).value,
+            "retryable": is_retryable(exception),
+        }
+
+        if isinstance(exception, PromptOptimizerError):
+            context["error_code"] = exception.code.name
+            context["error_code_value"] = exception.code.value
+            context.update(exception.context)
+
+        context.update(additional_context)
+        return context
+
+
+# Backwards compatibility alias
+error_handler = EnhancedErrorHandler()
