@@ -119,9 +119,9 @@ def mock_settings():
     with patch('config.settings') as mock:
         mock.xai_api_key = "test-api-key"
         mock.xai_model = "grok-4-1-fast"
-        mock.xai_base_url = "https://api.x.ai/v1"
+        mock.xai_api_base = "https://api.x.ai/v1"
         mock.database_url = "sqlite:///:memory:"
-        mock.free_tier_daily_limit = 5
-        mock.paid_tier_daily_limit = 1000
+        mock.default_temperature = 0.7
+        mock.default_max_tokens = 2000
         mock.enable_collections = False
         yield mock

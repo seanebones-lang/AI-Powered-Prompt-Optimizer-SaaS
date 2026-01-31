@@ -41,9 +41,9 @@ def mock_httpx_response():
 @pytest.fixture
 def mock_http_pool(mock_httpx_response):
     """Mock the HTTP connection pool."""
-    with patch('api_utils.HTTPConnectionPool') as mock_pool_class:
+    with patch('api_utils.get_pooled_client') as mock_pool_func:
         mock_client = MagicMock()
-        mock_pool_class.get_client.return_value = mock_client
+        mock_pool_func.return_value = mock_client
         mock_client.post.return_value = mock_httpx_response()
         yield mock_client
 
@@ -58,7 +58,7 @@ def test_grok_api_initialization():
         mock_settings.xai_model = "grok-4-1-fast-reasoning"
 
         api = GrokAPI()
-        assert api.model == "grok-4-1-fast-reasoning"
+        assert api.default_model == "grok-4-1-fast-reasoning"
         assert api.api_key == "test_key"
 
 
@@ -219,9 +219,9 @@ def test_api_error_handling():
     from api_utils import GrokAPI
 
     # Create fresh mock for this test
-    with patch('api_utils.HTTPConnectionPool') as mock_pool_class:
+    with patch('api_utils.get_pooled_client') as mock_pool_func:
         mock_client = MagicMock()
-        mock_pool_class.get_client.return_value = mock_client
+        mock_pool_func.return_value = mock_client
 
         # Mock API error response with proper JSON error format
         error_response = MagicMock(spec=httpx.Response)

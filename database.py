@@ -6,8 +6,7 @@ import logging
 from datetime import datetime, date
 from typing import Optional, List, Dict
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Date, Float, func
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 from sqlalchemy.exc import SQLAlchemyError
 from config import settings
 import bcrypt
