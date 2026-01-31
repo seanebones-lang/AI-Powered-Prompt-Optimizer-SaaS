@@ -68,13 +68,33 @@ def cache_response(prompt: str, agent_name: str, response: Dict[str, Any]):
 
 
 
+class SimpleCache:
+    """Simple in-memory cache singleton."""
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._cache = {}
+        return cls._instance
+
+    def get(self, key):
+        return self._cache.get(key)
+
+    def set(self, key, value, ttl=3600):
+        self._cache[key] = value
+
+    def clear(self):
+        self._cache = {}
+
+
+# Global cache instance
+_cache_instance = None
+
+
 def get_cache():
-    """Get a simple cache instance."""
-    class SimpleCache:
-        def __init__(self):
-            self._cache = {}
-        def get(self, key):
-            return self._cache.get(key)
-        def set(self, key, value, ttl=3600):
-            self._cache[key] = value
-    return SimpleCache()
+    """Get the singleton cache instance."""
+    global _cache_instance
+    if _cache_instance is None:
+        _cache_instance = SimpleCache()
+    return _cache_instance

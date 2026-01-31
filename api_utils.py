@@ -7,10 +7,9 @@ Uses direct HTTP requests with httpx - verified working approach as of Jan 2026.
 import json
 import logging
 import hashlib
-import httpx
 from typing import Dict, List, Optional, Any
 from config import settings
-from performance import HTTPConnectionPool, track_performance
+from performance import track_performance
 from cache_utils import get_cache
 from monitoring import get_metrics
 from observability import get_tracker
@@ -295,13 +294,16 @@ class GrokAPI:
             elif not isinstance(usage_data, dict):
                 usage_data = {}
             
+            # Get model name from response (or use default)
+            model_name = data.get("model", self.default_model)
+
             # Track LLM call for observability (cost, latency, tokens)
-            with tracker.track_call(payload['model']) as llm_call:
+            with tracker.track_call(model_name) as llm_call:
                 llm_call.set_tokens(usage_data)
-            
+
             # Record cost
             cost_optimizer.record_cost(
-                model=payload['model'],
+                model=model_name,
                 prompt_tokens=usage_data.get("prompt_tokens", 0) or 0,
                 completion_tokens=usage_data.get("completion_tokens", 0) or 0,
                 operation="api_completion"

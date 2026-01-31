@@ -12,6 +12,7 @@ import json
 import time
 
 # Core imports
+from config import settings
 from agents import OrchestratorAgent, PromptType
 from agent_config import AgentConfigManager
 from database import db
